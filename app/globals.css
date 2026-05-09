@@ -1,0 +1,718 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  /* 暗夜玫瑰主题色变量 */
+  --xx-bg: #14101a;
+  --xx-bg-2: #1f1828;
+  --xx-rose: #e8b4b8;
+  --xx-purple: #8b3a72;
+  --xx-red: #a83244;
+  --xx-gold: #d4af7a;
+}
+
+html,
+body {
+  background: var(--xx-bg);
+  color: #f0e8e8;
+  font-family: "Inter Tight", "HarmonyOS Sans SC", "PingFang SC", system-ui,
+    -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* 全局背景：底色 + 极淡玫瑰光晕（左上）+ 暗紫光晕（右下） */
+body {
+  background-image:
+    radial-gradient(
+      ellipse 80% 60% at 15% 10%,
+      rgba(232, 180, 184, 0.06),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 90% 90%,
+      rgba(139, 58, 114, 0.08),
+      transparent 60%
+    );
+  background-attachment: fixed;
+}
+
+/* 标题用衬线 + 字距收紧，更御 */
+h1,
+h2,
+h3,
+.font-serif {
+  font-family: "Noto Serif SC", "Manrope", "Songti SC", serif;
+  letter-spacing: 0.02em;
+}
+
+/* 金句斜体（用于 markdown em / blockquote） */
+.font-quote,
+.markdown-body em,
+.markdown-body blockquote {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+}
+
+/* 滚动条：玫瑰金调 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a2e44;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5a2347;
+}
+
+/* 文本选中：玫瑰金 */
+::selection {
+  background: rgba(232, 180, 184, 0.35);
+  color: #fff;
+}
+
+/* 打字光标：玫瑰金 */
+.typing-cursor::after {
+  content: "▋";
+  display: inline-block;
+  margin-left: 2px;
+  color: #e8b4b8;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Markdown 内容样式（AI 回复） */
+/* Markdown 内容样式（AI 回复） —— v4 御姐亲笔信质感 + 米色家族字色 + 楷体手写感
+ * 设计原则：
+ *  - 字体：霞鹜文楷 Screen（手写楷体，不飘逸）+ PingFang 兜底
+ *  - 字色：米色家族（不再纯白），跟玫瑰金重点形成双色
+ *  - 段间距大、行距宽、首段装饰条
+ *  - 用户问题区独立保持现状（白色 + 黑体），不受影响 */
+.markdown-body {
+  line-height: 1.92;
+  font-size: 16px;
+  letter-spacing: 0.015em;
+  /* 默认米色（讲道理档），三档会通过父级 [data-mode] 覆盖 */
+  color: #d8d0c4;
+  font-family:
+    "LXGW WenKai Screen",
+    "LXGW WenKai",
+    "Noto Serif SC",
+    "PingFang SC",
+    "HarmonyOS Sans SC",
+    serif;
+  font-weight: 400;
+}
+/* 小屏：字号缩一档，行距收一点，让小屏装得下原版排版而不需要改布局 */
+@media (max-width: 767px) {
+  .markdown-body {
+    font-size: 14.5px;
+    line-height: 1.78;
+  }
+}
+@media (max-width: 499px) {
+  .markdown-body {
+    font-size: 13.8px;
+    line-height: 1.72;
+  }
+}
+
+/* 三档字色微调：保持米色家族但暗示人格 */
+[data-mode="casual"] .markdown-body {
+  color: #e8d5bc; /* 暖米奶茶——姐姐温度 */
+}
+[data-mode="rational"] .markdown-body {
+  color: #d8d0c4; /* 中性米灰——冷静理性 */
+}
+[data-mode="scathing"] .markdown-body {
+  color: #d0c0a8; /* 偏冷米褐——御姐冷感 */
+}
+
+/* 首段：加一个极简竖条装饰代替 emoji，形成"她开口说第一句话"的仪式感 */
+.markdown-body > p:first-child {
+  position: relative;
+  padding-left: 14px;
+  margin-top: 0;
+}
+.markdown-body > p:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 2px;
+  height: 1em;
+  background: linear-gradient(180deg, #d4af7a 0%, #8b3a72 100%);
+  border-radius: 1px;
+}
+
+/* 段落：段后距大幅拉开，形成"说完一句停一下"的节奏 */
+.markdown-body p {
+  margin: 0 0 1.15em 0;
+  font-feature-settings: "palt" 1;
+}
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* 粗体：玫瑰金强调，跟米底形成对比 */
+.markdown-body strong {
+  color: #e8b4b8;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: "PingFang SC", "Noto Serif SC", sans-serif; /* 粗体回到无衬线，更突出 */
+}
+
+/* 斜体：用衬线斜体表达"引用 / 她转了个调" */
+.markdown-body em {
+  font-family: "Noto Serif SC", "Cormorant Garamond", serif;
+  font-style: italic;
+  color: #d4af7a;
+  font-size: 1.04em;
+  font-weight: 400;
+}
+
+.markdown-body code {
+  background: #1f1828;
+  color: #e8b4b8;
+  padding: 0.12em 0.45em;
+  border-radius: 3px;
+  font-size: 0.88em;
+  font-family: "JetBrains Mono", "Menlo", monospace;
+  letter-spacing: 0;
+}
+.markdown-body pre {
+  background: #1a1424;
+  border: 1px solid #3a2e44;
+  padding: 0.9em 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1em 0 1.2em;
+}
+
+/* 列表 */
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5em;
+  margin: 0.3em 0 1.15em 0;
+}
+.markdown-body li {
+  margin: 0.55em 0;
+  line-height: 1.82;
+}
+.markdown-body ul li::marker {
+  color: #d4af7a;
+  content: "—  ";
+}
+.markdown-body ol li::marker {
+  color: #d4af7a;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+}
+
+/* 引用块：左边竖金条 + 衬线斜体，像"她在重复你刚说的话" */
+.markdown-body blockquote {
+  border-left: 2px solid #d4af7a;
+  padding: 0.2em 0 0.2em 1.1em;
+  margin: 1.1em 0 1.3em;
+  color: #e8b4b8;
+  font-family: "Noto Serif SC", "Cormorant Garamond", serif;
+  font-style: italic;
+  font-size: 1.02em;
+  line-height: 1.7;
+  opacity: 0.92;
+}
+
+/* 标题：用衬线宋体 + 小间距 */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 1.6em 0 0.6em;
+  color: #fff;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+.markdown-body h1 { font-size: 1.2em; }
+.markdown-body h2 { font-size: 1.1em; }
+.markdown-body h3 {
+  font-size: 1em;
+  color: #d4af7a;
+}
+
+.markdown-body hr {
+  border: none;
+  margin: 1.6em 0;
+  text-align: center;
+  height: auto;
+}
+.markdown-body hr::before {
+  content: "· · ·";
+  color: #8b3a72;
+  letter-spacing: 0.6em;
+  font-size: 0.85em;
+}
+
+/* 模式切换按钮的发光效果（重新调色） */
+.mode-glow-casual {
+  box-shadow: 0 0 28px -4px rgba(139, 58, 114, 0.55);
+}
+.mode-glow-rational {
+  box-shadow: 0 0 28px -4px rgba(212, 175, 122, 0.5);
+}
+.mode-glow-scathing {
+  box-shadow: 0 0 36px -4px rgba(168, 50, 68, 0.65);
+}
+
+/* 卡片入场动画 */
+.fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 身形剪影背景容器 —— 挂在消息列表内，贴右下 */
+.silhouette-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+/* ============================================
+ * 对话安全区 —— 两幕布局
+ * 幕一：首页（data-has-messages="false"）—— 居中，与右侧人物形成迎宾对称
+ * 幕二：对话中（data-has-messages="true"）—— 左对齐，气泡永不跨中线
+ *
+ * 断点策略：
+ * - lg(≥1024px)：幕一居中 max 720px；幕二锁左 55vw
+ * - md(768-1024px)：幕一居中 70vw；幕二左对齐 70vw
+ * - sm(<768px)：两幕都全屏，人物变半透明背景
+ * ============================================ */
+.chat-safe-zone {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+  padding-right: 8px;
+  transition: max-width 0.4s ease, margin 0.4s ease;
+}
+
+/* 幕一：首页居中（保留仪式感） */
+.chat-safe-zone[data-has-messages="false"] {
+  margin-left: auto;
+  margin-right: auto;
+  padding-right: 8px;
+}
+@media (min-width: 768px) {
+  .chat-safe-zone[data-has-messages="false"] {
+    max-width: 70vw;
+  }
+}
+@media (min-width: 1024px) {
+  .chat-safe-zone[data-has-messages="false"] {
+    max-width: min(62vw, 720px);
+  }
+}
+
+/* 幕二：对话中左对齐让出人物 */
+.chat-safe-zone[data-has-messages="true"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+@media (min-width: 768px) {
+  .chat-safe-zone[data-has-messages="true"] {
+    max-width: 70vw;
+    padding-right: 16px;
+  }
+}
+@media (min-width: 1024px) {
+  .chat-safe-zone[data-has-messages="true"] {
+    max-width: min(55vw, 640px);
+    padding-right: 24px;
+  }
+}
+@media (min-width: 1440px) {
+  .chat-safe-zone[data-has-messages="true"] {
+    max-width: min(52vw, 680px);
+  }
+}
+
+/* 输入框安全区：跟聊天区同步两幕布局 */
+.input-safe-zone {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+  transition: max-width 0.4s ease, margin 0.4s ease;
+}
+
+/* 幕一：首页输入框居中 */
+.input-safe-zone[data-has-messages="false"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 768px) {
+  .input-safe-zone[data-has-messages="false"] {
+    max-width: 72vw;
+  }
+}
+@media (min-width: 1024px) {
+  .input-safe-zone[data-has-messages="false"] {
+    max-width: min(64vw, 760px);
+  }
+}
+
+/* 幕二：对话中输入框左对齐 */
+.input-safe-zone[data-has-messages="true"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+@media (min-width: 768px) {
+  .input-safe-zone[data-has-messages="true"] {
+    max-width: 72vw;
+  }
+}
+@media (min-width: 1024px) {
+  .input-safe-zone[data-has-messages="true"] {
+    max-width: min(58vw, 720px);
+  }
+}
+@media (min-width: 1440px) {
+  .input-safe-zone[data-has-messages="true"] {
+    max-width: min(55vw, 760px);
+  }
+}
+
+/* 三张 AI 人像叠加（v3：哑光底纹化处理）
+   通过 data-active 切换
+   设计理念：人物不是"前景演员"而是"页面底纹装饰"——尺寸更大、色调统一、边缘柔化
+*/
+.silhouette-img {
+  position: absolute;
+  right: -2%;
+  bottom: -4%; /* 向下溢出让底部自然没入输入框 */
+  width: auto;
+  height: 112%; /* 放大：人物更占视觉分量，半身像贴满右侧 */
+  max-height: none;
+  max-width: 52%;
+  object-fit: contain;
+  object-position: right bottom;
+
+  /* 径向渐隐：以右下为圆心向外，外 40% 柔化融入页面 */
+  -webkit-mask-image: radial-gradient(
+    ellipse 85% 95% at 85% 85%,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.95) 40%,
+    rgba(0, 0, 0, 0.6) 70%,
+    rgba(0, 0, 0, 0.15) 92%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 85% 95% at 85% 85%,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.95) 40%,
+    rgba(0, 0, 0, 0.6) 70%,
+    rgba(0, 0, 0, 0.15) 92%,
+    transparent 100%
+  );
+
+  /* 哑光底纹化：压暗 + 半去色 + 微倾紫调，让人物从深色里"浮出"而不是"贴在上面"
+     注意：不能压太暗，否则小窗口/低亮度屏看不清 */
+  filter: brightness(0.65) contrast(1.06) saturate(0.45) hue-rotate(-6deg);
+
+  opacity: 0;
+  transition: opacity 1.1s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.silhouette-img[data-active="true"] {
+  opacity: 0.95;
+}
+
+/* 玫瑰紫色融合层：与人物 multiply 混合，把白衣/肤色统一染到页面色调
+   注意：紫色压力度要克制，否则人物脸会发紫"脏" */
+.silhouette-backdrop::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 55%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2; /* 在人物之上，在气泡之下 */
+  mix-blend-mode: multiply;
+  background: radial-gradient(
+    ellipse 90% 90% at 90% 80%,
+    rgba(44, 32, 56, 0) 0%,
+    rgba(44, 32, 56, 0.08) 40%,
+    rgba(44, 32, 56, 0.22) 75%,
+    rgba(20, 16, 26, 0.4) 100%
+  );
+}
+
+/* 中线垂直渐变遮罩（v3）：配合 ::after 的玫瑰紫色层，此层只负责气泡区压暗
+   - 首页：基本不压，保持画面通透
+   - 对话中：左 1/3 有轻微暗角提升气泡可读性 */
+.silhouette-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition: background 0.5s ease;
+  /* 用 px 锁定渐变宽度，不随窗口缩小成"全屏暗" */
+  background: linear-gradient(
+    to right,
+    rgba(20, 16, 26, 0.12) 0px,
+    rgba(20, 16, 26, 0.03) 240px,
+    transparent 420px
+  );
+}
+.silhouette-backdrop[data-has-messages="true"]::before {
+  background: linear-gradient(
+    to right,
+    rgba(20, 16, 26, 0.32) 0px,
+    rgba(20, 16, 26, 0.14) 280px,
+    rgba(20, 16, 26, 0.04) 480px,
+    transparent 600px
+  );
+}
+
+@media (max-width: 767px) {
+  /* 手机端：保持原布局（人物始终在右下，气泡始终在左），只缩小字体和卡片
+     - 不挪位置、不改 opacity、不切首页/对话两套布局
+     - 全屏一致体验 */
+  .silhouette-img {
+    /* 跟桌面端同位置（right:-2% bottom:-4%），但比例略缩 */
+    height: 100%;
+    max-width: 60%;
+    /* 不覆盖 left/right/transform，全部继承大屏的 right:-2% bottom:-4% */
+  }
+  .silhouette-img[data-active="true"] {
+    opacity: 0.95;
+  }
+
+  /* 中线遮罩保持，宽度用 px 已锁定 */
+  /* ::after 紫色融合层保持，width: 55% 不变 */
+}
+
+/* 超小屏 <500px：只缩小字体和卡片，布局保持 */
+@media (max-width: 499px) {
+  .silhouette-img {
+    height: 95%;
+    max-width: 55%;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* 平板：人物在右下保持清晰，不再压暗 */
+  .silhouette-img {
+    height: 95%;
+    max-width: 50%;
+  }
+  .silhouette-img[data-active="true"] {
+    opacity: 0.95;
+  }
+}
+
+/* ============================================
+ * 模式卡片右侧的迷你头像（AI 图圆形版）
+ * v2：人像 PNG 已透明底，圆形容器必须有底色托住脸
+ * ============================================ */
+.mini-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  /* 深色底 + 极淡玫瑰径向光，让透明底的脸不飘空 */
+  background:
+    radial-gradient(circle at 50% 60%, rgba(139, 58, 114, 0.25), transparent 70%),
+    linear-gradient(135deg, #1f1828 0%, #14101a 100%);
+  transition: all 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+.mini-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%; /* 聚焦到脸部 */
+  display: block;
+}
+/* 未激活：暗调 + 灰化 + 无描边 */
+.mini-avatar-dim {
+  opacity: 0.55;
+  filter: grayscale(0.5) brightness(0.75);
+  box-shadow: 0 0 0 1px rgba(110, 86, 112, 0.6);
+}
+.mini-avatar-dim:hover {
+  opacity: 0.85;
+  filter: grayscale(0.1) brightness(0.95);
+}
+/* 激活：金色描边 + 发光 + 完全饱和 */
+.mini-avatar-active {
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px #d4af7a,
+    0 0 14px -2px rgba(212, 175, 122, 0.7),
+    0 0 22px -4px rgba(232, 180, 184, 0.4);
+}
+
+/* ============================================
+ * 对话进行中的 Session 标题条（参考 toxic-pm 杠精风格）
+ * 产品名 · 人格 + 轮次徽章
+ * ============================================ */
+.chat-session-title {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: rgba(232, 180, 184, 0.85);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.chat-round-indicator {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #6e5670;
+  line-height: 1.2;
+}
+
+/* 标题 logo 的渐变金属质感（玫瑰金→珍珠白→玫瑰粉） */
+.brand-title,
+.logo-serif {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  background: linear-gradient(
+    135deg,
+    #fffafa 0%,
+    #f5e3e3 35%,
+    #e8b4b8 70%,
+    #d4af7a 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(232, 180, 184, 0.15);
+  filter: drop-shadow(0 1px 0 rgba(20, 16, 26, 0.5));
+}
+
+/* 顶部导航 slogan：所有屏幕都显示，只缩字号
+   - 桌面：12.5px 完整间距
+   - 平板：11.5px
+   - 手机：10.5px 紧凑间距
+   - 极窄 <360px：仍然显示，只是更小（用 nowrap 防换行） */
+.hero-slogan {
+  display: inline;
+  font-size: 12.5px;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .hero-slogan {
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+  }
+}
+@media (max-width: 499px) {
+  .hero-slogan {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+  }
+}
+@media (max-width: 359px) {
+  .hero-slogan {
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+}
+
+.brand-en,
+.font-display {
+  font-family: "Manrope", "Inter Tight", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+}
+
+/* ============================================
+ * 模式区文案字体：三级层次
+ * mode-hint   —— "选择今天想要的醒醒"
+ * mode-label  —— 随便聊 / 讲道理 / 扇巴掌
+ * mode-subtitle —— 姐不陪你做梦 / 我不拆结构 / ...
+ * ============================================ */
+
+/* 顶部小字提示：Cormorant 斜体 + 长字距，像杂志副标题 */
+.mode-hint {
+  font-family: "Cormorant Garamond", "Noto Serif SC", "Songti SC", serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: rgba(232, 180, 184, 0.62);
+}
+
+/* 模式主标签：衬线 + 700 + 字距收紧 + 珍珠白 */
+.mode-label {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+}
+
+/* 模式 subtitle：半衬线 + 斜体 + 偏小 + 字距 */
+.mode-subtitle {
+  font-family: "Cormorant Garamond", "Noto Serif SC", "Songti SC", serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+}
+/* 三档卡片字号小屏缩档（布局保留，不换） */
+@media (max-width: 767px) {
+  .mode-label {
+    font-size: 14.5px;
+  }
+  .mode-subtitle {
+    font-size: 11.5px;
+  }
+}
+@media (max-width: 499px) {
+  .mode-label {
+    font-size: 13.5px;
+    letter-spacing: 0.04em;
+  }
+  .mode-subtitle {
+    font-size: 10.5px;
+  }
+}

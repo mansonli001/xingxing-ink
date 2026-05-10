@@ -47,3 +47,6 @@ public/silhouettes/_v1_backup/
 public/silhouettes/_v2/
 public/silhouettes/_before_cutout/
 *.bak
+
+# 研究目录（toxic-pm 逆向采样数据，不上传）
+/_research/

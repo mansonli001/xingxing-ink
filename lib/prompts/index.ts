@@ -44,14 +44,40 @@ export const MODES: Record<ModeId, WakeMode> = {
 };
 
 const promptCache: Partial<Record<ModeId, string>> = {};
+let arsenalCache: string | null = null;
 const IS_DEV = process.env.NODE_ENV !== "production";
+
+const ARSENAL_FILENAME = "_arsenal.md";
+
+function loadArsenal(): string {
+  // dev 模式不缓存 arsenal，方便边改边看效果
+  if (!IS_DEV && arsenalCache !== null) return arsenalCache;
+
+  const filePath = path.join(process.cwd(), "lib", "prompts", ARSENAL_FILENAME);
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    if (!IS_DEV) arsenalCache = content;
+    return content;
+  } catch {
+    // arsenal 缺失不应阻断主流程：兜底返回空，主 prompt 仍可工作
+    if (!IS_DEV) arsenalCache = "";
+    return "";
+  }
+}
 
 export function loadSystemPrompt(mode: ModeId): string {
   // dev 不走缓存，改 .md 立刻生效；生产走缓存，读盘仅一次
   if (!IS_DEV && promptCache[mode]) return promptCache[mode]!;
 
   const filePath = path.join(process.cwd(), "lib", "prompts", `${mode}.md`);
-  const content = fs.readFileSync(filePath, "utf-8");
+  const main = fs.readFileSync(filePath, "utf-8");
+
+  // v0.5.0：把弹药库以 reference 形式追加到主 prompt 末尾
+  const arsenal = loadArsenal();
+  const content = arsenal
+    ? `${main}\n\n# ============ 弹药库（产品经理硬通货 reference · v0.5.0） ============\n\n${arsenal}`
+    : main;
+
   if (!IS_DEV) promptCache[mode] = content;
   return content;
 }

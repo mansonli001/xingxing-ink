@@ -107,6 +107,18 @@ export function MessageBubble({
       anchor = sentences[0] || raw.slice(0, 60);
     }
 
+    // v0.7.7：清除 markdown 符号再截断
+    //   用户气泡里不该出现 **加粗** / *斜体* / # 标题 / > 引用 / `代码` 这些原始 md 符号
+    anchor = anchor
+      .replace(/\*\*([^*]+)\*\*/g, "$1")  // **bold** → bold
+      .replace(/\*([^*]+)\*/g, "$1")       // *italic* → italic
+      .replace(/`([^`]+)`/g, "$1")         // `code` → code
+      .replace(/^#+\s*/g, "")              // ### 标题 → 标题
+      .replace(/^>\s*/g, "")               // > 引用 → 引用
+      .replace(/[\[\]「」""]/g, "")        // 去掉会和话术模板冲突的成对引号
+      .replace(/\s+/g, " ")                // 多空格合并
+      .trim();
+
     // 长度截断
     if (anchor.length > 60) {
       anchor = anchor.slice(0, 58) + "…";

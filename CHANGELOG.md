@@ -8,6 +8,83 @@
 
 ---
 
+## [v0.7.7] - 2026-05-10 — 「修复 · 追问标记漏出到用户气泡 + 锚点 markdown 清理」
+
+> 一句话总结：v0.7.3 的「追问这一段」一键直发，前端把 `__FOLLOWUP__|anchor|utterance` 整串既当 API payload 又当用户气泡内容渲染，结果用户看到一大坨 `__FOLLOWUP__|**一句话告诉我...|就你刚才说的「**一句话告诉我...」——再深挖一层` 垃圾标记。同时锚点里夹着 markdown `**加粗**` 符号也没清理。v0.7.7 在 `ChatShell.sendMessageWith` 里拆包：API 用完整 payload（后端识别），气泡和 state 只存自然话术。`MessageBubble.handleQuote` 抽锚点前清掉 md 符号。
+
+### 翻车截图（用户反馈）
+
+用户气泡赫然显示：
+
+```
+__FOLLOWUP__|**一句话告诉我：你比梁文锋多懂什么？|就你
+刚才说的「**一句话告诉我：你比梁文锋多懂什么？」——再
+深挖一层、别换话题、别重复你说过的话。
+```
+
+**两个叠加 bug**：
+
+1. **内部标记漏出**：`__FOLLOWUP__|` 和中间分隔符 `|` 作为 protocol marker，本该只给后端看，被直接当 text 渲染
+2. **Markdown 漏出**：锚点里的 `**` 加粗符号没清理，气泡里用户看到 `「**一句话...」` 视觉很脏
+
+### Fixed 1 —— `ChatShell.sendMessageWith` 拆包 payload
+
+文件：`components/ChatShell.tsx`
+
+新增 `apiText` / `displayText` 分离：
+
+```ts
+const apiText = text;              // 发后端用，保留 __FOLLOWUP__ 标记
+let displayText = text;            // 渲染气泡 + 写入 state 用，只要自然话术
+if (text.startsWith("__FOLLOWUP__|")) {
+  const rest = text.slice("__FOLLOWUP__|".length);
+  const sepIdx = rest.indexOf("|");
+  if (sepIdx > 0) {
+    displayText = rest.slice(sepIdx + 1).trim() || text;
+  }
+}
+```
+
+然后：
+- `userMsg.content = displayText`（两处：preset 分支 + 主分支）
+- `body.message = apiText`（送后端保留完整标记）
+
+这样后端仍能识别追问模式走 DIRECTOR_NOTE，用户只看到干净的自然话术。
+
+### Fixed 2 —— `MessageBubble.handleQuote` 锚点 markdown 清理
+
+文件：`components/MessageBubble.tsx`
+
+在选出锚点句后，截断前加一层 markdown 清理：
+
+```ts
+anchor = anchor
+  .replace(/\*\*([^*]+)\*\*/g, "$1")  // **bold** → bold
+  .replace(/\*([^*]+)\*/g, "$1")       // *italic* → italic
+  .replace(/`([^`]+)`/g, "$1")         // `code` → code
+  .replace(/^#+\s*/g, "")              // ### 标题 → 标题
+  .replace(/^>\s*/g, "")               // > 引用 → 引用
+  .replace(/[\[\]「」""]/g, "")        // 去掉会和话术模板冲突的成对引号
+  .replace(/\s+/g, " ")                // 多空格合并
+  .trim();
+```
+
+核心是**去掉会和自然话术模板 `就你刚才说的「...」` 冲突的引号**——如果锚点本身带 `「」` 或 `""`，拼进模板后会嵌套混乱。
+
+### 不动的（架构红线保留）
+
+- ✅ v0.7.3 追问一键直发的 `__FOLLOWUP__|anchor|utterance` protocol 不变（后端仍在用）
+- ✅ v0.7.4 分层 prompt 架构完全保留
+- ✅ v0.7.5 / v0.7.6 三档铁律和 stripStageDirections 完全保留
+- ✅ `sendMessageWith` 对外签名不变（仍收单字符串，内部拆包）
+- ✅ `MessageBubble` 锚点优先级（最后问句 → 最短问句 → 第一句）不变
+
+### 风险评估
+
+极低 —— 纯前端渲染层修复，不涉及后端协议、不涉及 prompt、不涉及 session 存储。tsc 0 错误。
+
+---
+
 ## [v0.7.6] - 2026-05-10 — 「代码层兜底 · 舞台指示后置过滤器」
 
 > 一句话总结：v0.7.5 铁律 0 三连迭代（v0.7.1 → v0.7.5）都没能彻底堵住 DeepSeek 在 casual 档输出 `（把咖啡杯往桌上一搁，挑眉看你）` 这类舞台指示——**模型对"嫌弃小妹"的风格先验太强，纯 prompt 压不住**。v0.7.6 在 stream 层加代码兜底：按行缓冲 + 正则扫 + 只对"独立出现的短舞台指示"下手。真机首轮验证彻底消除。

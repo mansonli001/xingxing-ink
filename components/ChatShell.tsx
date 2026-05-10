@@ -123,6 +123,23 @@ export function ChatShell() {
     const text = rawText.trim();
     if (!text || streaming) return;
 
+    // v0.7.7：拆 __FOLLOWUP__ 标记
+    //   apiText = 发给后端的完整 payload（含标记，后端识别）
+    //   displayText = 渲染到用户气泡和写入 messages 的内容（只有自然话术，用户看不到内部标记）
+    //
+    // 旧 bug：直接把 `__FOLLOWUP__|anchor|utterance` 整串作为 userMsg.content 渲染，
+    //        用户气泡显示一大坨 __FOLLOWUP__|...| 标记，极不专业。
+    const apiText = text;
+    let displayText = text;
+    if (text.startsWith("__FOLLOWUP__|")) {
+      const rest = text.slice("__FOLLOWUP__|".length);
+      const sepIdx = rest.indexOf("|");
+      if (sepIdx > 0) {
+        // 只取 utterance 部分给用户看
+        displayText = rest.slice(sepIdx + 1).trim() || text;
+      }
+    }
+
     // v0.4.2 预制快速路径：用户首次点击 EmptyState 9 个 tip 之一时，
     // 直接塞预制回复 + 预制 mp3，0 延迟、0 API 开销。
     // 仅在"完全空对话"状态下生效——后续追问全走真实 deepseek。
@@ -135,7 +152,7 @@ export function ChatShell() {
       const userMsg: ChatMessageItem = {
         id: uid(),
         role: "user",
-        content: text,
+        content: displayText,
         done: true,
       };
       const assistantId = uid();
@@ -184,7 +201,7 @@ export function ChatShell() {
     const userMsg: ChatMessageItem = {
       id: uid(),
       role: "user",
-      content: text,
+      content: displayText,
       done: true,
     };
     const assistantMsg: ChatMessageItem = {
@@ -206,7 +223,7 @@ export function ChatShell() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text,
+          message: apiText,
           mode,
           session_id: sessionId,
         }),

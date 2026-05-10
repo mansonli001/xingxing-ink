@@ -1,6 +1,35 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ChatShell } from "@/components/ChatShell";
+import { WakeUpIntro } from "@/components/WakeUpIntro";
 
 export default function Home() {
+  // 默认 true（避免首屏闪过），mount 后读 sessionStorage 决定是否播
+  const [showIntro, setShowIntro] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const played = sessionStorage.getItem("xx_intro_played");
+      if (played === "1") {
+        setShowIntro(false);
+      }
+    } catch {
+      // 隐私模式忽略
+    }
+    setHydrated(true);
+  }, []);
+
+  // 未 hydrate 完成前直接给一个深色全屏占位，避免 FOUC
+  if (!hydrated) {
+    return <div className="fixed inset-0 bg-xx-bg" />;
+  }
+
+  if (showIntro) {
+    return <WakeUpIntro onDone={() => setShowIntro(false)} />;
+  }
+
   return (
     <main className="h-[100dvh] w-full bg-xx-bg flex flex-col">
       <header className="relative z-20 border-b border-xx-border px-3 sm:px-6 py-3 flex items-center justify-between gap-2 bg-xx-bg/85 backdrop-blur-md">

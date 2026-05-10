@@ -88,6 +88,10 @@ export function Chat({
 
   return (
     <div className="relative flex h-full w-full flex-col" data-mode={mode}>
+      {/* 全屏剪影背景 —— 视口级 fixed，滚动不跟跑、气泡区独立滚动
+          放在最外层最前面，z-0 打底 */}
+      <SilhouetteBackdrop mode={mode} hasMessages={messages.length > 0} />
+
       {/* 顶部：对话中显示"杠精风格"徽章（产品名 + 当前人格 + 轮次） */}
       {locked ? (
         <div className="relative z-10 px-4 sm:px-6 pt-3 pb-2 flex items-center justify-between border-b border-xx-border bg-xx-bg/85 backdrop-blur-sm">
@@ -133,20 +137,14 @@ export function Chat({
             disabled={streaming}
             locked={false}
           />
-          <p className="mt-2 text-xs text-xx-text-dim leading-relaxed">
-            {currentMeta.description}
-          </p>
         </div>
       )}
 
-      {/* 消息列表（御姐剪影恒作为全屏背景） */}
+      {/* 消息列表 */}
       <div
         ref={listRef}
         className="relative z-0 flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-4"
       >
-        {/* 全屏剪影背景 —— 所有尺寸都显示 */}
-        <SilhouetteBackdrop mode={mode} hasMessages={messages.length > 0} />
-
         {/* 对话安全区：
             - 空状态（无消息）：居中，与右侧人物形成迎宾对称
             - 有消息：左对齐，max-width 55vw，让出右侧给人物 */}
@@ -190,13 +188,17 @@ export function Chat({
                 turnCount > 0
                   ? "继续聊 · 或点上一条消息的「追问这一段」"
                   : mode === "scathing"
-                  ? "把你的想法丢过来。我等着醒你。"
+                  ? "把你最得意的那个 idea 丢过来。我专挑你没敢看的那一页。"
                   : mode === "rational"
-                  ? "想法、PRD、决策——拆给我看。"
-                  : "嗯？说说看？"
+                  ? "说。我只问一句——谁付钱，付多少，付几次。"
+                  : "又有新想法？说说看…（上次那个呢）"
               }
               disabled={streaming}
-              className="flex-1 resize-none bg-transparent text-sm text-xx-text placeholder:text-xx-text-dim outline-none max-h-40"
+              /* 关键：手机端字号必须 ≥16px，否则 iOS/Android 浏览器
+                 会在聚焦时自动放大整个页面，输入完无法缩回
+                 font-size 用内联 style 强覆盖，保证不被任何规则压低 */
+              style={{ fontSize: "16px" }}
+              className="flex-1 resize-none bg-transparent text-xx-text placeholder:text-xx-text-dim outline-none max-h-40 leading-relaxed"
             />
             <button
               type="button"
@@ -235,21 +237,29 @@ function EmptyState({
   onPickTip: (text: string) => void;
   disabled?: boolean;
 }) {
+  /** tips 设计原则（2026-05-10 v2）：
+   *   三档示例不是"idea 难度的升级"，是"用户处境的不同"——
+   *   让用户看完能对号入座，立刻知道"我这种情况选哪档"。
+   *
+   *   随便聊 = 我脑子里在飘点子（她戳你行为层：你上次那个呢）
+   *   讲道理 = 我已经有点雏形要验 （她戳你证据层：数据呢）
+   *   扇巴掌 = 我有个"改变世界"的幻觉（她戳你动机层：你在逃什么）
+   */
   const tips: Record<ModeId, string[]> = {
     casual: [
-      "我想做一个帮大学生找对象的 App",
-      "我打算辞职去做自媒体",
-      "我们部门要做一个 AI 中台",
+      "今天突然想做个陪伴类 AI",
+      "我又想做自媒体了",
+      "我打算开个小红书账号记录日常",
     ],
     rational: [
-      "评估一下：做一个面向打工人的副业 SaaS，估值能到多少",
-      "我的产品 PRD 在这里：……",
-      "我准备 all in 一个新方向，帮我拆一下假设",
+      "我做了个 PRD，用户画像是月薪 1-2 万打工人",
+      "我调研了 30 个朋友都说愿意付费",
+      "MVP 预算 50 万，3 个月上线，拆给我看",
     ],
     scathing: [
-      "我有一个 idea，绝对能干掉抖音",
-      "我准备做下一个 DeepSeek",
-      "我要辞职 all in AI 创业",
+      "我要做下一个 DeepSeek",
+      "我要 all in 辞职去做 AI 创业",
+      "我这个 idea 绝对能干掉抖音",
     ],
   };
 

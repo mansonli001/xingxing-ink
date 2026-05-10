@@ -29,6 +29,12 @@ yarn-error.log*
 .env*.local
 .env
 
+# 本地图片备份（开发调试用，不进生产包）
+/public/silhouettes/_v1_backup/
+/public/silhouettes/_v2_backup/
+/public/silhouettes/_v3_backup/
+/public/silhouettes/_new/
+/public/silhouettes/_new_*/
 # vercel
 .vercel
 

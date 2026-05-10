@@ -296,9 +296,14 @@ h3,
   }
 }
 
-/* 身形剪影背景容器 —— 挂在消息列表内，贴右下 */
+/* 身形剪影背景容器 —— 视口级 fixed，钉在右下角不随消息滚动
+   关键改动：
+   - position: fixed（不是 absolute），参照视口而不是父容器
+   - 覆盖整屏（inset:0），但只渲染右下 55% 区域
+   - pointer-events:none 让点击穿透到气泡
+   - z-index 0 打底，气泡在 z-10 之上 */
 .silhouette-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
@@ -416,52 +421,73 @@ h3,
 */
 .silhouette-img {
   position: absolute;
-  right: -2%;
-  bottom: -4%; /* 向下溢出让底部自然没入输入框 */
+  /* v8 关键：脱离"靠底对齐"，改为"右侧 + 顶部留白"
+     这样大屏下头部不会被切，脸永远可见 */
+  right: -3%;
+  top: 8%; /* 上方留 8% 空间，让头顶不顶到 header */
+  bottom: auto;
   width: auto;
-  height: 112%; /* 放大：人物更占视觉分量，半身像贴满右侧 */
-  max-height: none;
-  max-width: 52%;
+  height: 92%; /* v8：高度回归 92%，配合 top:8% 不会溢出底部 */
+  max-height: 92vh;
+  max-width: 56%; /* v8：略缩到 56%，给气泡区留更多 */
   object-fit: contain;
-  object-position: right bottom;
+  object-position: right top; /* 顶部对齐，确保头不被切 */
 
-  /* 径向渐隐：以右下为圆心向外，外 40% 柔化融入页面 */
-  -webkit-mask-image: radial-gradient(
-    ellipse 85% 95% at 85% 85%,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.95) 40%,
-    rgba(0, 0, 0, 0.6) 70%,
-    rgba(0, 0, 0, 0.15) 92%,
-    transparent 100%
-  );
-  mask-image: radial-gradient(
-    ellipse 85% 95% at 85% 85%,
-    rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.95) 40%,
-    rgba(0, 0, 0, 0.6) 70%,
-    rgba(0, 0, 0, 0.15) 92%,
-    transparent 100%
-  );
+  /* 浏览器渲染优化：让放大后的图片更平滑 */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
 
-  /* 哑光底纹化：压暗 + 半去色 + 微倾紫调，让人物从深色里"浮出"而不是"贴在上面"
-     注意：不能压太暗，否则小窗口/低亮度屏看不清 */
-  filter: brightness(0.65) contrast(1.06) saturate(0.45) hue-rotate(-6deg);
+  /* v8 mask 简化：图本身已透明（rembg AI 抠图），不再需要兜底纯黑遮挡
+     只做"和页面融合"的羽化：
+     - 左侧：让人物左边 10-25% 渐隐到透明，给气泡区干净空间
+     - 顶部：让发顶轻度羽化避免硬边
+     - 底部：让底边淡出避免硬切 */
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
+    linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.5) 5%, rgba(0,0,0,1) 14%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
+    linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.5) 5%, rgba(0,0,0,1) 14%);
+  mask-composite: intersect;
 
+  /* v8：移除 mix-blend-mode lighten（图已透明，不需要兜底）
+     只保留轻度色调统一 */
+  filter: brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg);
+
+  /* v8.3：基于真实测量数据 + 更低透明度
+     三张图人物占画布比例都 94-97%，大小本身一致；
+     脸中心相对画布位置：casual 16.9% / rational 15.8% / scathing 14.7%
+     以 casual 为基准，rational 下移 1%，scathing 下移 2%，让三张脸对齐 */
   opacity: 0;
   transition: opacity 1.1s cubic-bezier(0.33, 1, 0.68, 1);
 }
 .silhouette-img[data-active="true"] {
-  opacity: 0.95;
+  opacity: 0.62;
+}
+
+/* v8.3 基于测量：rational 脸中心比 casual 靠上 1.1% → 下移 1% */
+.silhouette-img[src*="rational"] {
+  transform: translateY(1%) translateZ(0);
+}
+/* v8.3 基于测量：scathing 脸中心比 casual 靠上 2.2% → 下移 2% */
+.silhouette-img[src*="scathing"] {
+  transform: translateY(2%) translateZ(0);
 }
 
 /* 玫瑰紫色融合层：与人物 multiply 混合，把白衣/肤色统一染到页面色调
-   注意：紫色压力度要克制，否则人物脸会发紫"脏" */
+   v6：人物放大到 60% 宽，紫色层同步扩大到 62%，覆盖完整人物范围
+   只在最外圈强一点，中心区（脸部）几乎不染 */
 .silhouette-backdrop::after {
   content: "";
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 55%;
+  width: 62%; /* v6：跟随人物放大 */
   height: 100%;
   pointer-events: none;
   z-index: 2; /* 在人物之上，在气泡之下 */
@@ -469,9 +495,9 @@ h3,
   background: radial-gradient(
     ellipse 90% 90% at 90% 80%,
     rgba(44, 32, 56, 0) 0%,
-    rgba(44, 32, 56, 0.08) 40%,
-    rgba(44, 32, 56, 0.22) 75%,
-    rgba(20, 16, 26, 0.4) 100%
+    rgba(44, 32, 56, 0.04) 50%,
+    rgba(44, 32, 56, 0.14) 80%,
+    rgba(20, 16, 26, 0.3) 100%
   );
 }
 
@@ -504,39 +530,55 @@ h3,
 }
 
 @media (max-width: 767px) {
-  /* 手机端：保持原布局（人物始终在右下，气泡始终在左），只缩小字体和卡片
-     - 不挪位置、不改 opacity、不切首页/对话两套布局
-     - 全屏一致体验 */
+  /* 手机端：v8.3 人物作为更低调背景 */
   .silhouette-img {
-    /* 跟桌面端同位置（right:-2% bottom:-4%），但比例略缩 */
-    height: 100%;
-    max-width: 60%;
-    /* 不覆盖 left/right/transform，全部继承大屏的 right:-2% bottom:-4% */
+    top: 14%;
+    bottom: auto;
+    height: 80%;
+    max-width: 62%;
   }
   .silhouette-img[data-active="true"] {
-    opacity: 0.95;
+    opacity: 0.58;
   }
-
-  /* 中线遮罩保持，宽度用 px 已锁定 */
-  /* ::after 紫色融合层保持，width: 55% 不变 */
+  .silhouette-img[src*="rational"] {
+    transform: translateY(1%) translateZ(0);
+  }
+  .silhouette-img[src*="scathing"] {
+    transform: translateY(2%) translateZ(0);
+  }
 }
 
-/* 超小屏 <500px：只缩小字体和卡片，布局保持 */
+/* 超小屏 <500px */
 @media (max-width: 499px) {
   .silhouette-img {
-    height: 95%;
-    max-width: 55%;
+    top: 16%;
+    height: 72%;
+    max-width: 58%;
+  }
+  .silhouette-img[src*="rational"] {
+    transform: translateY(1%) translateZ(0);
+  }
+  .silhouette-img[src*="scathing"] {
+    transform: translateY(2%) translateZ(0);
   }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  /* 平板：人物在右下保持清晰，不再压暗 */
+  /* 平板：v8.3 */
   .silhouette-img {
-    height: 95%;
-    max-width: 50%;
+    top: 12%;
+    bottom: auto;
+    height: 84%;
+    max-width: 58%;
   }
   .silhouette-img[data-active="true"] {
-    opacity: 0.95;
+    opacity: 0.60;
+  }
+  .silhouette-img[src*="rational"] {
+    transform: translateY(1%) translateZ(0);
+  }
+  .silhouette-img[src*="scathing"] {
+    transform: translateY(2%) translateZ(0);
   }
 }
 

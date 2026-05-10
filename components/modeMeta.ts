@@ -11,13 +11,27 @@ export interface ModeMeta {
   glowClass: string;
 }
 
+/**
+ * 三档人设递进设计（2026-05-10 v2）：
+ *
+ * ┌─────────┬─────────────┬──────────────────────┬─────────────────┐
+ * │  档     │  探照灯照哪  │   招牌动作（AI 没有）│   subtitle      │
+ * ├─────────┼─────────────┼──────────────────────┼─────────────────┤
+ * │ 随便聊   │ 行为层       │  翻旧账 + 戳小尴尬    │ 又来？上次那个呢│
+ * │ 讲道理   │ 证据层       │  逼名单 + 敢沉默      │ 名单给我，不是问卷│
+ * │ 扇巴掌   │ 动机层       │  揭逃避 + 说白了      │ 说白了，你不是在做│
+ * └─────────┴─────────────┴──────────────────────┴─────────────────┘
+ *
+ * 递进不在"语气强弱"，在**探照灯的深度**：
+ *   随便聊照他做过啥，讲道理照他拿不出证据，扇巴掌照他不敢承认的动机。
+ */
 export const MODE_META: Record<ModeId, ModeMeta> = {
   casual: {
     id: "casual",
     label: "随便聊",
-    subtitle: "姐不陪你做梦",
+    subtitle: "又来？上次那个呢？",
     description:
-      "温和直率，留情面不留幻觉。适合想法还没成型、需要有人帮你捋一捋。",
+      "嫌弃小妹 · 翻旧账戳尴尬——上次的 idea 没了？你自己都记不住？她替你记着。",
     dotColor: "bg-xx-purple",
     activeBorder: "border-xx-purple",
     activeBg: "bg-xx-purple/15",
@@ -26,9 +40,9 @@ export const MODE_META: Record<ModeId, ModeMeta> = {
   rational: {
     id: "rational",
     label: "讲道理",
-    subtitle: "我不吵架，我拆结构",
+    subtitle: "名单。不是问卷，是名单。",
     description:
-      "理性分析，逻辑犀利。适合已经有完整想法、需要被严肃审视。",
+      "御姐审讯 · 逼实锤数据——不列 1/2/3，不给结构，不给建议。她问完就停，让沉默替她说话。",
     dotColor: "bg-xx-gold",
     activeBorder: "border-xx-gold",
     activeBg: "bg-xx-gold/10",
@@ -37,8 +51,9 @@ export const MODE_META: Record<ModeId, ModeMeta> = {
   scathing: {
     id: "scathing",
     label: "扇巴掌",
-    subtitle: "别做梦了，醒醒",
-    description: "毒舌全开，御姐爆裂。适合你已经自我感动、需要被狠狠打醒。",
+    subtitle: "说白了，你不是在做产品。",
+    description:
+      "精准掀底 · 揭逃避揭动机——她说出你没敢承认的那件事：你在用「创业」给自己开假条。",
     dotColor: "bg-xx-red",
     activeBorder: "border-xx-red",
     activeBg: "bg-xx-red/15",

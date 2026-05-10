@@ -23,6 +23,10 @@ export const viewport: Viewport = {
   themeColor: "#14101a",
   width: "device-width",
   initialScale: 1,
+  /* 允许用户手动双指缩放（无障碍），但配合 textarea font-size:16px
+     已经从根本上避免 iOS 聚焦自动放大 */
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({

@@ -740,6 +740,75 @@ h3,
 }
 
 /* ============================================
+ * v0.6.1：微信语音风格头像按钮（AudioPlayer 左侧）
+ * - 40x40 圆形，比 mini-avatar 大一圈但又比大剪影克制
+ * - 用聊天区大图（848x1264）裁出头肩，object-position 精确到脸
+ * - idle：极细金色描边，低调
+ * - hover：描边亮起 + 轻微放大
+ * - speaking：呼吸脉动 + 金色光晕（跟大剪影的 speaking 动效呼应）
+ * ============================================ */
+.wx-avatar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 122, 0.45),
+    0 1px 4px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.3s ease;
+}
+.wx-avatar-btn:hover {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 1.5px #d4af7a,
+    0 0 10px -2px rgba(212, 175, 122, 0.65),
+    0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.wx-avatar-btn:active {
+  transform: scale(0.96);
+}
+.wx-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 848x1264 大图是半身竖构图，脸大约在上方 22-26%，裁成圆形只露头肩 */
+  object-position: center 24%;
+  display: block;
+}
+/* 播放时呼吸脉动——跟大剪影的 speaking 动效视觉节奏一致 */
+.wx-avatar-btn[data-speaking="true"] {
+  animation: wx-avatar-breath 1.6s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px #d4af7a,
+    0 0 14px -1px rgba(212, 175, 122, 0.85),
+    0 0 22px -3px rgba(232, 180, 184, 0.55);
+}
+@keyframes wx-avatar-breath {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.08);
+  }
+}
+/* reduced motion：只留发光，不动 */
+@media (prefers-reduced-motion: reduce) {
+  .wx-avatar-btn[data-speaking="true"] {
+    animation: none;
+  }
+}
+
+/* ============================================
  * 对话进行中的 Session 标题条（参考 toxic-pm 杠精风格）
  * 产品名 · 人格 + 轮次徽章
  * ============================================ */

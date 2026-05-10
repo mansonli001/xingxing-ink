@@ -73,6 +73,13 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** v0.6.1：微信语音风格头像——用聊天区大图（848x1264）裁脸，比 mini-avatar 大一圈 */
+const WX_AVATAR_SRC: Record<AudioMode, string> = {
+  casual: "/silhouettes/casual.png",
+  rational: "/silhouettes/rational.png",
+  scathing: "/silhouettes/scathing.png",
+};
+
 export function AudioPlayer({
   text,
   mode = "casual",
@@ -258,7 +265,7 @@ export function AudioPlayer({
           onClick={resumeOrReplay}
           className="inline-flex items-center gap-1.5 rounded-md border border-xx-border/60 hover:border-xx-gold hover:text-xx-gold px-2.5 py-1 text-[12px] text-xx-text-dim transition-colors"
         >
-          ▶ 再听一遍
+          ▶ 再听一遍姐姐的
         </button>
       );
     }
@@ -282,7 +289,7 @@ export function AudioPlayer({
         onClick={loadAndPlay}
         className="inline-flex items-center gap-1.5 rounded-md border border-xx-border/60 hover:border-xx-gold hover:text-xx-gold px-2.5 py-1 text-[12px] text-xx-text-dim transition-colors"
       >
-        ▶ 让她说说
+        ▶ 听姐姐的语音
       </button>
     );
   }
@@ -294,6 +301,23 @@ export function AudioPlayer({
 
   return (
     <div className="flex flex-wrap items-center gap-2 mt-2">
+      {/* v0.6.1：微信语音风格头像（点击 = 同主按钮行为，高清半身大图裁脸） */}
+      <button
+        type="button"
+        onClick={status === "playing" ? pause : resumeOrReplay}
+        aria-label={status === "playing" ? "暂停姐姐的语音" : "听姐姐的语音"}
+        title={status === "playing" ? "暂停" : "听姐姐的语音"}
+        className="wx-avatar-btn"
+        data-speaking={status === "playing" ? "true" : "false"}
+      >
+        <img
+          src={WX_AVATAR_SRC[mode]}
+          alt=""
+          className="wx-avatar-img"
+          loading="lazy"
+        />
+      </button>
+
       <MainButton />
 
       {/* 进度条（半透明 1px 金色细线，flex-wrap 时手机端不溢出气泡） */}

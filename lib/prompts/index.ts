@@ -74,9 +74,10 @@ export function loadSystemPrompt(mode: ModeId): string {
 
   // v0.5.0：把弹药库以 reference 形式追加到主 prompt 末尾
   // v0.6.0：F 段强化 forced choice（编号化 + ≥2/≥3 下限 + 反例黑名单）
+  // v0.7.0：三档 prompt 末尾追加"反套路化铁律"（非线性追问 + 招牌轮换 + 第3轮意外动作 + 轮次种子）
   const arsenal = loadArsenal();
   const content = arsenal
-    ? `${main}\n\n# ============ 弹药库（产品经理硬通货 reference · v0.6.0） ============\n\n${arsenal}`
+    ? `${main}\n\n# ============ 弹药库（产品经理硬通货 reference · v0.7.0） ============\n\n${arsenal}`
     : main;
 
   if (!IS_DEV) promptCache[mode] = content;

@@ -27,19 +27,57 @@ type AnySpeechRecognition = {
 };
 
 /**
- * 检测 iPhone / iPad Safari（含 iPadOS 上伪装 Mac 的 Safari）
+ * 检测"当前浏览器的 Web Speech API 实际上不能用"——包括：
+ *   1. iPhone / iPad Safari（苹果多年静默失败 bug）
+ *   2. iPadOS 上伪装 Mac 的 Safari
+ *   3. 任何 iOS 上的"套壳浏览器"（Chrome/Firefox/Edge/微信 都被强制 WebKit）
+ *   4. 微信内嵌浏览器（桌面/移动均无麦克风录音权限）
+ *   5. 其他内嵌 WebView（抖音/微博/飞书/QQ）
  *
- * 为什么要单独处理：即使 iOS Safari 暴露了 `webkitSpeechRecognition` 对象，
- * 实际调用 .start() 时**几乎 100% 静默失败**——这是苹果多年未修的 bug。
- * 与其显示一个"假"按钮让用户困惑，不如直接隐藏，引导用键盘麦克风。
+ * 为什么要单独处理：即使 window.webkitSpeechRecognition 对象存在，
+ * 这些环境里调用 .start() 几乎 100% 静默失败——与其显示一个"假"按钮让用户困惑，
+ * 不如直接隐藏。
+ *
+ * localStorage 里持久化"曾经失败过"——若按钮被点击过但识别失败，下次访问直接不渲染。
  */
-function isIOSSafari(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  const iOS = /iP(ad|hone|od)/.test(ua);
-  const iPadOSSafariDesktopMode =
-    navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  return iOS || iPadOSSafariDesktopMode;
+function isKnownUnsupported(): boolean {
+  if (typeof navigator === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+  const ua = navigator.userAgent || "";
+
+  // 1. iPhone/iPad/iPod UA 特征
+  if (/iP(ad|hone|od)/i.test(ua)) return true;
+  // 2. iPadOS 上伪装 Mac 的触屏 Safari
+  if (
+    navigator.platform === "MacIntel" &&
+    typeof navigator.maxTouchPoints === "number" &&
+    navigator.maxTouchPoints > 1
+  ) {
+    return true;
+  }
+  // 3. 微信内嵌浏览器（无论 Android/iOS，都不走原生 Web Speech API）
+  if (/MicroMessenger/i.test(ua)) return true;
+  // 4. 其它常见内嵌 WebView
+  if (/QQ\/|Weibo|TikTok|AlipayClient|DingTalk|FeishuLark|Lark/i.test(ua)) {
+    return true;
+  }
+  // 5. 上次访问里失败过 → 记住，直接不渲染
+  try {
+    if (window.localStorage.getItem("mic-sr-broken") === "1") return true;
+  } catch {
+    /* 隐私模式可能拒绝 localStorage，忽略 */
+  }
+  return false;
+}
+
+/** 把"此浏览器确认不能用"持久化到 localStorage，下次直接隐藏 */
+function markSRBroken() {
+  try {
+    window.localStorage.setItem("mic-sr-broken", "1");
+  } catch {
+    /* 忽略 */
+  }
 }
 
 /**
@@ -56,13 +94,15 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
   const [recognizing, setRecognizing] = useState(false);
   const [errorHint, setErrorHint] = useState<string>("");
   const recogRef = useRef<AnySpeechRecognition | null>(null);
+  const silentFailTimerRef = useRef<number | null>(null);
+  const gotAnyResponseRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // v0.4.2.2: iPhone/iPad Safari 直接判为不支持
-    // （API 存在但调用必定静默失败——多年苹果 bug，不如不显示）
-    if (isIOSSafari()) {
+    // v0.4.2.3: 多层防御——UA 检测 + 微信检测 + localStorage 记忆
+    // 任何已知不支持的环境，按钮直接不渲染
+    if (isKnownUnsupported()) {
       setSupported(false);
       return;
     }
@@ -111,6 +151,7 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       recognition.interimResults = false;
 
       recognition.onresult = (ev) => {
+        gotAnyResponseRef.current = true;
         let combined = "";
         for (let i = 0; i < ev.results.length; i++) {
           combined += ev.results[i][0].transcript;
@@ -120,18 +161,26 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       };
 
       recognition.onerror = (ev) => {
+        gotAnyResponseRef.current = true;
         setRecording(false);
         setRecognizing(false);
         // 常见 error 类型：not-allowed / no-speech / audio-capture / network / aborted
         const errType = ev?.error || "unknown";
         if (errType === "not-allowed") {
           setErrorHint("请允许麦克风权限（设置里）");
+          // not-allowed 可能是用户暂时拒绝，先不持久化
         } else if (errType === "no-speech") {
           setErrorHint("没听到内容，再说一遍");
         } else if (errType === "audio-capture") {
-          setErrorHint("没找到麦克风设备");
+          setErrorHint("此浏览器不支持录音，下次将隐藏");
+          markSRBroken(); // 环境问题，持久化
+          setSupported(false); // 本次也立刻隐藏
         } else if (errType === "network") {
           setErrorHint("网络问题，识别失败");
+        } else if (errType === "service-not-allowed") {
+          setErrorHint("此环境不支持语音识别");
+          markSRBroken();
+          setSupported(false);
         } else if (errType !== "aborted") {
           setErrorHint(`识别失败：${errType}`);
         }
@@ -140,15 +189,41 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       };
 
       recognition.onend = () => {
+        gotAnyResponseRef.current = true;
         setRecording(false);
         setRecognizing(false);
       };
 
       recogRef.current = recognition;
+      gotAnyResponseRef.current = false;
       recognition.start();
       setRecording(true);
+
+      // Watchdog：点击后 4 秒内如果既没 result 也没 error 也没 end
+      // → 说明此浏览器静默失败，永久隐藏按钮
+      if (silentFailTimerRef.current) {
+        window.clearTimeout(silentFailTimerRef.current);
+      }
+      silentFailTimerRef.current = window.setTimeout(() => {
+        if (!gotAnyResponseRef.current) {
+          // 静默失败！标记 + 隐藏
+          markSRBroken();
+          setSupported(false);
+          setRecording(false);
+          setErrorHint("此浏览器不支持语音识别，已隐藏");
+          window.setTimeout(() => setErrorHint(""), 3000);
+          try {
+            recogRef.current?.abort();
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 4000);
     } catch (e) {
       setRecording(false);
+      // start() 直接抛错——通常也是环境问题（如微信内嵌 WebView）
+      markSRBroken();
+      setSupported(false);
       setErrorHint(
         e instanceof Error ? `启动失败：${e.message}` : "启动失败"
       );

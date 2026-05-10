@@ -114,7 +114,13 @@ export function MessageBubble({
               </ReactMarkdown>
             )}
           </div>
-          {message.done && message.content.length > 0 && TTS_ENABLED ? (
+          {/* v0.4.2.4：
+              · 预制音频（presetAudio）：始终显示播放器（不受 TTS_ENABLED 控制），
+                让首屏 9 个 tip 都能听到，并通过 onSpeakingChange 触发人像呼吸
+              · 真实 TTS 合成：仅在 NEXT_PUBLIC_TTS_ENABLED=true 时显示 */}
+          {message.done &&
+          message.content.length > 0 &&
+          (TTS_ENABLED || message.presetAudio) ? (
             <AudioPlayer
               text={message.content}
               mode={message.mode || "casual"}

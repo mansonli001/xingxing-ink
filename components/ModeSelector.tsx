@@ -38,7 +38,8 @@ export function ModeSelector({
                 : undefined
             }
             className={[
-              "group relative flex items-center gap-2 rounded-lg border px-3 py-3.5 sm:px-4 sm:py-3.5 transition-all overflow-hidden",
+              // v0.4.2.4：手机端按钮放大（py-4.5 + 更紧凑的左右 padding，让标题/副标题清晰可读）
+              "group relative flex items-center gap-2 rounded-lg border px-3 py-4 sm:px-4 sm:py-3.5 transition-all overflow-hidden",
               active
                 ? `${meta.activeBorder} ${meta.activeBg} ${meta.glowClass}`
                 : "border-xx-border bg-xx-bg-2 hover:border-xx-text-dim",

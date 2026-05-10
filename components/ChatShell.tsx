@@ -97,7 +97,9 @@ function toFriendlyError(rawMsg: string): string {
  * 状态提升到这里，便于后续扩展（如记录/侧栏/多会话）
  */
 export function ChatShell() {
-  const [mode, setMode] = useState<ModeId>("scathing");
+  // v0.4.2.4 Bug4a：默认人格改为"随便聊"——首屏直接给"扇巴掌"过于冲击，
+  // 用户没准备好。"随便聊"温和入场，让用户自己升级到讲道理/扇巴掌。
+  const [mode, setMode] = useState<ModeId>("casual");
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -126,21 +128,55 @@ export function ChatShell() {
     // 仅在"完全空对话"状态下生效——后续追问全走真实 deepseek。
     const preset = messages.length === 0 ? findPreset(mode, text) : null;
     if (preset) {
+      // v0.4.2.4 Bug2 修复：预制气泡逐段淡入，不再瞬间一次性出现
+      //  · 第 1 段 0ms 立即显示（保留"炸裂感"，用户不必等）
+      //  · 第 2 段起每段间隔 220ms 淡入（节奏自然不假）
+      //  · 全程总时长 ≈ (段数-1) × 220ms（典型 4 段 = 660ms，比真 AI 快得多但不瞬出）
       const userMsg: ChatMessageItem = {
         id: uid(),
         role: "user",
         content: text,
         done: true,
       };
-      const assistantMsg: ChatMessageItem = {
-        id: uid(),
-        role: "assistant",
-        content: preset.reply,
-        done: true,
-        mode,
-        presetAudio: preset.audio,
-      };
-      setMessages([userMsg, assistantMsg]);
+      const assistantId = uid();
+      const segments = preset.reply
+        .split(/\n\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      // 立刻插入用户消息 + 第一段（done=false 让光标显示）
+      setMessages([
+        userMsg,
+        {
+          id: assistantId,
+          role: "assistant",
+          content: segments[0] || preset.reply,
+          done: segments.length <= 1,
+          mode,
+          presetAudio: preset.audio,
+        },
+      ]);
+
+      // 后续段落逐段追加
+      if (segments.length > 1) {
+        for (let i = 1; i < segments.length; i++) {
+          const isLast = i === segments.length - 1;
+          await new Promise<void>((resolve) =>
+            window.setTimeout(resolve, 220)
+          );
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: m.content + "\n\n" + segments[i],
+                    done: isLast,
+                  }
+                : m
+            )
+          );
+        }
+      }
       // 不调 deepseek、不创建 session_id（让用户第二轮起再走真实 API）
       return;
     }

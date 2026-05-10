@@ -12,66 +12,92 @@ interface MicInputProps {
 /**
  * 浏览器原生 Web Speech Recognition 类型声明（避免依赖 @types/dom-speech-recognition）
  */
+type SRResult = {
+  isFinal: boolean;
+  0: { transcript: string };
+};
 type AnySpeechRecognition = {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   onresult:
-    | ((ev: { results: ArrayLike<{ 0: { transcript: string } }> }) => void)
+    | ((ev: { results: ArrayLike<SRResult>; resultIndex: number }) => void)
     | null;
   onerror: ((ev: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   start: () => void;
   stop: () => void;
   abort: () => void;
 };
 
 /**
- * 检测"当前浏览器的 Web Speech API 实际上不能用"——包括：
+ * v0.4.2.4：检测"原生 Web Speech API 在此环境不可用"——
+ * 不再隐藏按钮；改为：返回 reason 让 UI 提供引导文案。
+ *
+ * 不可用包括：
  *   1. iPhone / iPad Safari（苹果多年静默失败 bug）
- *   2. iPadOS 上伪装 Mac 的 Safari
- *   3. 任何 iOS 上的"套壳浏览器"（Chrome/Firefox/Edge/微信 都被强制 WebKit）
- *   4. 微信内嵌浏览器（桌面/移动均无麦克风录音权限）
- *   5. 其他内嵌 WebView（抖音/微博/飞书/QQ）
- *
- * 为什么要单独处理：即使 window.webkitSpeechRecognition 对象存在，
- * 这些环境里调用 .start() 几乎 100% 静默失败——与其显示一个"假"按钮让用户困惑，
- * 不如直接隐藏。
- *
- * localStorage 里持久化"曾经失败过"——若按钮被点击过但识别失败，下次访问直接不渲染。
+ *   2. iPadOS 上伪装 Mac 的触屏 Safari
+ *   3. 任何 iOS 上的"套壳浏览器"
+ *   4. 微信内嵌浏览器
+ *   5. 其他常见内嵌 WebView（QQ/微博/抖音/支付宝/钉钉/飞书）
  */
-function isKnownUnsupported(): boolean {
+type UnsupportedReason =
+  | "ios"
+  | "wechat"
+  | "webview"
+  | "no-api"
+  | "broken-once";
+
+function detectUnsupported(): UnsupportedReason | null {
   if (typeof navigator === "undefined" || typeof window === "undefined") {
-    return false;
+    return null;
   }
   const ua = navigator.userAgent || "";
 
-  // 1. iPhone/iPad/iPod UA 特征
-  if (/iP(ad|hone|od)/i.test(ua)) return true;
+  // 1. iPhone/iPad/iPod
+  if (/iP(ad|hone|od)/i.test(ua)) return "ios";
   // 2. iPadOS 上伪装 Mac 的触屏 Safari
   if (
     navigator.platform === "MacIntel" &&
     typeof navigator.maxTouchPoints === "number" &&
     navigator.maxTouchPoints > 1
   ) {
-    return true;
+    return "ios";
   }
-  // 3. 微信内嵌浏览器（无论 Android/iOS，都不走原生 Web Speech API）
-  if (/MicroMessenger/i.test(ua)) return true;
+  // 3. 微信内嵌浏览器
+  if (/MicroMessenger/i.test(ua)) return "wechat";
   // 4. 其它常见内嵌 WebView
   if (/QQ\/|Weibo|TikTok|AlipayClient|DingTalk|FeishuLark|Lark/i.test(ua)) {
-    return true;
+    return "webview";
   }
-  // 5. 上次访问里失败过 → 记住，直接不渲染
+  // 5. 上次访问里失败过 → 记住
   try {
-    if (window.localStorage.getItem("mic-sr-broken") === "1") return true;
+    if (window.localStorage.getItem("mic-sr-broken") === "1") {
+      return "broken-once";
+    }
   } catch {
     /* 隐私模式可能拒绝 localStorage，忽略 */
   }
-  return false;
+  // 6. 没有 API
+  const SR =
+    (
+      window as unknown as {
+        SpeechRecognition?: new () => AnySpeechRecognition;
+        webkitSpeechRecognition?: new () => AnySpeechRecognition;
+      }
+    ).SpeechRecognition ||
+    (
+      window as unknown as {
+        webkitSpeechRecognition?: new () => AnySpeechRecognition;
+      }
+    ).webkitSpeechRecognition;
+  if (!SR) return "no-api";
+
+  return null;
 }
 
-/** 把"此浏览器确认不能用"持久化到 localStorage，下次直接隐藏 */
+/** 把"此浏览器确认不能用"持久化到 localStorage */
 function markSRBroken() {
   try {
     window.localStorage.setItem("mic-sr-broken", "1");
@@ -80,52 +106,67 @@ function markSRBroken() {
   }
 }
 
+/** 各种"不可用"场景下，点按钮时弹的引导文案（中文，1 句话讲清楚怎么办） */
+function getGuideText(reason: UnsupportedReason): string {
+  switch (reason) {
+    case "ios":
+      return "iPhone/iPad 用键盘上的 🎤（长按空格键）";
+    case "wechat":
+      return "微信里不支持，点右上角浏览器打开";
+    case "webview":
+      return "内嵌浏览器不支持，外部浏览器打开试试";
+    case "broken-once":
+      return "上次出错了。如要重试：清浏览器存储后刷新";
+    case "no-api":
+      return "此浏览器不支持语音输入，请用 Chrome/Edge";
+  }
+}
+
 /**
  * 长按录音、松开识别麦克风按钮。
  *
- * v0.4.2.2 修复 iPhone 静默失败：
- * - iOS Safari 不再渲染按钮（Web Speech API 实际不工作，引导用键盘语音输入）
- * - 其它平台：保留原有长按录音 / 松开识别
- * - 识别失败时，toast 提示"换用键盘语音输入"
+ * v0.4.2.4 设计：
+ * - 不再隐藏按钮——所有平台都显示
+ * - 不可用环境（iOS/微信/...）→ 点击弹引导提示，告诉用户怎么用 iOS 键盘麦克风
+ * - PC Chrome 等可用环境 → continuous=true + interimResults=true，
+ *   说话停顿不会自动断流，按住能说完整段
  */
 export function MicInput({ onTranscript, disabled }: MicInputProps) {
-  const [supported, setSupported] = useState<boolean>(false);
+  const [unsupportedReason, setUnsupportedReason] =
+    useState<UnsupportedReason | null>(null);
   const [recording, setRecording] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
   const [errorHint, setErrorHint] = useState<string>("");
+  const [guideOpen, setGuideOpen] = useState(false);
   const recogRef = useRef<AnySpeechRecognition | null>(null);
   const silentFailTimerRef = useRef<number | null>(null);
   const gotAnyResponseRef = useRef<boolean>(false);
+  /** 累积所有 final 转写结果（continuous 模式下会多次 onresult） */
+  const finalTranscriptRef = useRef<string>("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    // v0.4.2.3: 多层防御——UA 检测 + 微信检测 + localStorage 记忆
-    // 任何已知不支持的环境，按钮直接不渲染
-    if (isKnownUnsupported()) {
-      setSupported(false);
-      return;
-    }
-
-    const SR =
-      (
-        window as unknown as {
-          SpeechRecognition?: new () => AnySpeechRecognition;
-          webkitSpeechRecognition?: new () => AnySpeechRecognition;
-        }
-      ).SpeechRecognition ||
-      (
-        window as unknown as {
-          webkitSpeechRecognition?: new () => AnySpeechRecognition;
-        }
-      ).webkitSpeechRecognition;
-    setSupported(!!SR);
+    setUnsupportedReason(detectUnsupported());
   }, []);
+
+  /** 不可用环境点击 → 弹引导文案 3.5s */
+  function showGuide() {
+    setGuideOpen(true);
+    window.setTimeout(() => setGuideOpen(false), 3500);
+  }
 
   function startRecording() {
     if (disabled || recording) return;
     if (typeof window === "undefined") return;
+
+    // 不可用环境直接弹引导
+    if (unsupportedReason) {
+      showGuide();
+      return;
+    }
+
     setErrorHint("");
+    finalTranscriptRef.current = "";
 
     const SR =
       (
@@ -140,51 +181,62 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
         }
       ).webkitSpeechRecognition;
     if (!SR) {
-      setErrorHint("浏览器不支持语音识别");
+      setUnsupportedReason("no-api");
+      showGuide();
       return;
     }
 
     try {
       const recognition = new SR();
       recognition.lang = "zh-CN";
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      // v0.4.2.4 Bug1 修复：开启持续监听 + 中间结果
+      // → 用户说话中间停顿 1-2 秒不会自动断
+      // → 必须主动 stop()（松手或自动 watchdog）才结束
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        gotAnyResponseRef.current = true;
+      };
 
       recognition.onresult = (ev) => {
         gotAnyResponseRef.current = true;
-        let combined = "";
-        for (let i = 0; i < ev.results.length; i++) {
-          combined += ev.results[i][0].transcript;
+        // 累积所有 final 结果。interim 结果暂时不回传（避免输入框抖动）
+        let newFinals = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const result = ev.results[i];
+          if (result.isFinal) {
+            newFinals += result[0].transcript;
+          }
         }
-        const finalText = combined.trim();
-        if (finalText) onTranscript(finalText);
+        if (newFinals) {
+          finalTranscriptRef.current += newFinals;
+        }
       };
 
       recognition.onerror = (ev) => {
         gotAnyResponseRef.current = true;
         setRecording(false);
         setRecognizing(false);
-        // 常见 error 类型：not-allowed / no-speech / audio-capture / network / aborted
         const errType = ev?.error || "unknown";
         if (errType === "not-allowed") {
           setErrorHint("请允许麦克风权限（设置里）");
-          // not-allowed 可能是用户暂时拒绝，先不持久化
         } else if (errType === "no-speech") {
+          // continuous 模式下 no-speech 较少见，发生了不强提示
           setErrorHint("没听到内容，再说一遍");
         } else if (errType === "audio-capture") {
-          setErrorHint("此浏览器不支持录音，下次将隐藏");
-          markSRBroken(); // 环境问题，持久化
-          setSupported(false); // 本次也立刻隐藏
+          setErrorHint("没找到麦克风");
+          markSRBroken();
+          setUnsupportedReason("broken-once");
         } else if (errType === "network") {
           setErrorHint("网络问题，识别失败");
         } else if (errType === "service-not-allowed") {
           setErrorHint("此环境不支持语音识别");
           markSRBroken();
-          setSupported(false);
+          setUnsupportedReason("broken-once");
         } else if (errType !== "aborted") {
           setErrorHint(`识别失败：${errType}`);
         }
-        // 3 秒后清掉提示
         window.setTimeout(() => setErrorHint(""), 3000);
       };
 
@@ -192,6 +244,12 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
         gotAnyResponseRef.current = true;
         setRecording(false);
         setRecognizing(false);
+        // 录音/识别真正结束时，把累积的 final 文本一次性回传
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          onTranscript(finalText);
+        }
+        finalTranscriptRef.current = "";
       };
 
       recogRef.current = recognition;
@@ -199,18 +257,16 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       recognition.start();
       setRecording(true);
 
-      // Watchdog：点击后 4 秒内如果既没 result 也没 error 也没 end
-      // → 说明此浏览器静默失败，永久隐藏按钮
+      // Watchdog：4 秒内既无 onstart 也无 onresult/onerror/onend → 静默失败
       if (silentFailTimerRef.current) {
         window.clearTimeout(silentFailTimerRef.current);
       }
       silentFailTimerRef.current = window.setTimeout(() => {
         if (!gotAnyResponseRef.current) {
-          // 静默失败！标记 + 隐藏
           markSRBroken();
-          setSupported(false);
+          setUnsupportedReason("broken-once");
           setRecording(false);
-          setErrorHint("此浏览器不支持语音识别，已隐藏");
+          setErrorHint("此浏览器不支持语音识别");
           window.setTimeout(() => setErrorHint(""), 3000);
           try {
             recogRef.current?.abort();
@@ -221,9 +277,8 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       }, 4000);
     } catch (e) {
       setRecording(false);
-      // start() 直接抛错——通常也是环境问题（如微信内嵌 WebView）
       markSRBroken();
-      setSupported(false);
+      setUnsupportedReason("broken-once");
       setErrorHint(
         e instanceof Error ? `启动失败：${e.message}` : "启动失败"
       );
@@ -259,10 +314,11 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording]);
 
-  // iOS Safari / 其它不支持 → 直接不渲染按钮
-  if (!supported) return null;
+  // v0.4.2.4：所有环境都显示按钮——不可用环境点击时弹引导提示
 
-  const tooltip = recording
+  const tooltip = unsupportedReason
+    ? getGuideText(unsupportedReason)
+    : recording
     ? "正在听……松手识别"
     : recognizing
     ? "识别中……"
@@ -285,6 +341,13 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
           e.preventDefault();
           startRecording();
         }}
+        onClick={(e) => {
+          // 不可用环境也允许触发（兼容 iOS Safari 下没 mousedown 链路的极端情况）
+          if (unsupportedReason && !recording) {
+            e.preventDefault();
+            showGuide();
+          }
+        }}
         onContextMenu={(e) => e.preventDefault()}
         className={[
           "inline-flex items-center justify-center rounded-md w-9 h-9 transition-all select-none",
@@ -296,6 +359,8 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
             ? "border border-xx-gold text-xx-gold animate-pulse"
             : errorHint
             ? "border border-xx-red text-xx-red"
+            : unsupportedReason
+            ? "border border-xx-border text-xx-text-dim hover:border-xx-gold/60 hover:text-xx-gold/80 opacity-70"
             : "border border-xx-border text-xx-text-dim hover:border-xx-gold hover:text-xx-gold",
         ].join(" ")}
       >
@@ -316,6 +381,13 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
           <path d="M8 22h8" />
         </svg>
       </button>
+      {/* 引导提示气泡（不可用环境点击时显示 3.5s） */}
+      {guideOpen && unsupportedReason ? (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs bg-xx-bg-2 border border-xx-gold text-xx-text rounded-md px-3 py-1.5 pointer-events-none shadow-lg z-50">
+          {getGuideText(unsupportedReason)}
+        </div>
+      ) : null}
+      {/* 错误提示气泡 */}
       {errorHint ? (
         <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs bg-xx-bg-2 border border-xx-red text-xx-red rounded px-2 py-1 pointer-events-none">
           {errorHint}

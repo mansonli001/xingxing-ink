@@ -8,6 +8,125 @@
 
 ---
 
+## [v0.4.2.5] - 2026-05-10 — 「磨砂剪影 · 内嵌音频 · 长语音不断流」
+
+> 一句话总结：姐姐变成磨砂玻璃后的人影（blur 16px + 全程 0.32 克制），AI 说话时模糊减半到 8px + opacity 0.7"浮现"出来；浏览器原生黑灰音频条全部去掉，自绘 1px 半透明金色细线 + 时间戳内嵌气泡；PC 长语音 60s 自动断流问题彻底修复（onend 自动续接，最多 10 次约 10 分钟）。
+
+### 背景
+
+v0.4.2.4 上线后用户反馈三个问题：
+1. **姐姐人像太清晰**——首屏看到一张高清美女照，「显得轻佻不神秘」；进入对话还从 0.32 跳到 0.55，更抢戏
+2. **每条 AI 消息下都弹出浏览器原生 audio 控件**（黑灰长条 + 进度条 + 喇叭 + 三点菜单），手机视口下还会横向溢出气泡；与极简日式黑金调性严重冲突，「太不符合现代了」
+3. **PC 网页版长语音录到一半就断**——明明 v0.4.2.4 已开 `continuous=true + interimResults=true`，但 Chrome 桌面版 SpeechRecognition 底层有 ~60s session 自动 onend 的隐藏限制
+
+### Changed —— 1. 姐姐人像剪影化（CSS-only）
+
+文件：`app/globals.css`
+
+| 状态 | 旧 opacity | 新 opacity | 旧 blur | 新 blur |
+|---|---|---|---|---|
+| 首屏默认 | 0.32 | 0.32 | 0 | **16px** |
+| 对话中静态（桌面） | 0.55 | **0.32** | 0 | 16px（继承基础 filter） |
+| 对话中静态（手机） | 0.50 | **0.30** | 0 | 16px |
+| 呼吸谷（0%/100%） | 0.55 | **0.32** | 0 | **16px** |
+| 呼吸峰（50%） | 0.85 | **0.7** | 0 | **8px** |
+
+**视觉效果**：
+- 首屏：磨砂玻璃后的人影感，能看出人形+发色，五官糊掉
+- 对话静态：保持 0.32 + 16px 模糊，全程克制不抢戏
+- AI 说话：blur 减半 + opacity 推到 0.7 + 金色光晕呼吸 = "浮现感"而非"突然变亮"
+
+**性能**：现有 `translateZ(0)` 硬件加速生效，blur 在 GPU 层运行；移动端实测 iOS Safari/Android Chrome 流畅。
+
+**保留**：三个 keyframe 的 brightness/contrast/saturate/hue-rotate/drop-shadow 滤镜链 + translateY 微差异（人格细节）+ saturate 从 0.88 微降到 0.78（避免模糊后还是粉嫩美女图，更接近"人影"）。
+
+### Changed —— 2. AudioPlayer 内嵌化重构
+
+文件：`components/AudioPlayer.tsx`
+
+**核心动作**：
+- `<audio>` 元素去掉 `controls` 属性，永久 `className="hidden"`，仅作为播放引擎
+- 监听 audio 的 `loadedmetadata` / `timeupdate` / `ended` / `play` / `pause` 事件，驱动 React state（duration / currentTime）
+- 自绘极简 UI 替代浏览器原生控件：
+  - **idle**：`▶ 让她说说`
+  - **loading**：`✦ 正在熬一遍…`（animate-pulse）
+  - **playing**：暂停按钮（28×28 紧凑）+ 半透明 1px 金色细线进度条 + 时间戳
+  - **paused**：继续按钮 + 进度条保留 + 时间戳
+  - **ended**：`▶ 再听一遍`（一次点击 currentTime=0 + play）
+  - **error**：`♻ 重试`
+- **半透明设计**：进度条容器 `bg-xx-border/30`、填充 `bg-xx-gold/70`、时间戳 `text-xx-text-dim/80`——融入气泡背景不抢戏
+- **手机端不溢出气泡**：容器 `flex flex-wrap items-center gap-2`，进度条 `flex-1 min-w-[60px] max-w-full`——窄屏自动换行不裁切
+
+**类型变更**：`Status` 从 4 状态扩展到 6 状态（新增 `paused` / `ended`，去掉旧的 `ready`）。
+
+**保留**：v0.4.1 模块级 blob 缓存 + v0.4.2 预制音频路径优先逻辑 + onPlayingChange 回调（人像呼吸联动）+ autoPlay 触发逻辑——一行不动。
+
+### Fixed —— 3. PC 长语音 60s 断流（核心 bug）
+
+文件：`components/MicInput.tsx`
+
+**根因**：Chrome 桌面版 SpeechRecognition 即使 `continuous=true`，底层仍会在 ~60s 后自动触发 onend。v0.4.2.4 的 onend 一触发就立刻 `setRecording(false) + onTranscript(finalText) + 清空累积文本`，所以用户手指还按着按钮也无法继续。
+
+**修复方案 —— onend 自动重启**：
+```ts
+const isUserHoldingRef = useRef<boolean>(false);  // 用户是否按着按钮
+const restartCountRef = useRef<number>(0);
+const MAX_RESTART = 10;  // 上限 10 次（约 10 分钟）防失控
+
+recognition.onend = () => {
+  if (isUserHoldingRef.current && restartCountRef.current < MAX_RESTART) {
+    restartCountRef.current++;
+    try {
+      recogRef.current?.start();   // 立即重启
+      return;                       // 不复位 recording、不清 finalTranscriptRef、不触发 onTranscript
+    } catch {
+      isUserHoldingRef.current = false;  // 失败降级到原停止逻辑
+    }
+  }
+  // 用户已松手 / 达到上限 / 重启失败 → 走原逻辑：复位 + 提交 final
+  ...
+};
+```
+
+**安全退出循环的 4 个边界**：
+1. `stopRecording()`（用户松手）：先 `isUserHoldingRef.current = false`，再调 `recognition.stop()`
+2. `onerror` 致命错误（`not-allowed` / `audio-capture` / `service-not-allowed`）：强制 `isUserHoldingRef.current = false`
+3. watchdog 4 秒静默失败检测触发：强制 `isUserHoldingRef.current = false`
+4. `recognition.start()` 抛错：catch 块强制退出
+
+**视觉对用户无感**：按钮持续金色脉冲、按钮始终亮着 → 用户感知"我说多久就听多久"。
+
+**保留**：watchdog（4s 静默失败检测）+ UnsupportedReason 检测（iOS/微信/webview 等）+ 引导气泡 + 错误提示——不改不动。
+
+### 不动的部分（爆炸半径控制）
+
+- AudioPlayer：blob 缓存、预制音频路径、自动播放、错误重试、onPlayingChange 回调
+- MicInput：watchdog、UnsupportedReason 检测、引导气泡、错误提示
+- 三个呼吸 keyframe 的滤镜链 + translateY 微差异（人格细节）
+- React 组件 props 接口、上层调用方（MessageBubble / page.tsx）零改动
+
+### 修改文件清单
+
+| 文件 | 改动 |
+|---|---|
+| `app/globals.css` | 剪影模糊化（5处+移动端同步）：基础 filter 加 blur(16px) saturate(0.78)；对话静态 opacity 全部降到 0.32；三个呼吸 keyframe 谷峰追加 blur 16px/8px 并降 opacity 到 0.32/0.7 |
+| `components/AudioPlayer.tsx` | 内嵌音频条重构：audio 永久隐藏去 controls；新增 duration/currentTime/paused/ended state；自绘按钮 + 1px 半透明金色进度条 + 时间戳；flex-wrap 防溢出 |
+| `components/MicInput.tsx` | 长语音自动续接：新增 isUserHoldingRef + restartCountRef；onend 自动 start() 重启最多 10 次；onerror/watchdog 强制退出循环 |
+| `CHANGELOG.md` | 追加 v0.4.2.5 条目 |
+
+### 验证清单（部署后逐项确认）
+
+1. ✅ 桌面端首屏：人像呈磨砂玻璃后的人影感，看不清五官，能看出发色轮廓
+2. ✅ 桌面端进入对话：透明度保持 0.32，模糊保留，姐姐很克制
+3. ✅ 桌面端 AI 说话：模糊度变浅（16→8），透明度从 0.32 推到 0.7，金色光晕呼吸
+4. ✅ 桌面端 + 手机端点"让她说说"：**不再出现浏览器原生黑灰音频条**，只有半透明金色细线 + 时间戳嵌入气泡
+5. ✅ 暂停按钮可点、再次点击继续播放、ended 后"再听一遍"可重播
+6. ✅ 手机窄屏下进度条自动换行不溢出气泡
+7. ✅ PC Chrome 长按麦克风说 90 秒 + 中间停顿 5 秒不切断
+8. ✅ 移动端三档人格切换：呼吸表现一致
+
+---
+
 ## [v0.4.2] - 2026-05-10 — 「9 条预制开场 · 0 延迟炸裂首屏」
 
 > 一句话总结：用户点 EmptyState 9 个引导 tip 时，**首轮直接播预制 mp3 + 显示预制文字**，0 延迟；同时输出文案中性化（不再暴露音色花名）+ 三档 prompt 注入【首轮黄金公式】。

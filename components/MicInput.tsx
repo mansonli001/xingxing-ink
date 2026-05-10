@@ -143,6 +143,15 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
   const gotAnyResponseRef = useRef<boolean>(false);
   /** 累积所有 final 转写结果（continuous 模式下会多次 onresult） */
   const finalTranscriptRef = useRef<string>("");
+  /**
+   * v0.4.2.5 长语音自动续接：
+   * Chrome 桌面版 SpeechRecognition 即使 continuous=true，也会在 ~60s 后被
+   * 系统自动 onend 切断。我们用「用户按住状态 ref」+「onend 自动重启」绕开：
+   * 只要用户手指还按着按钮，onend 后立即 start() 续接，文本累积不复位。
+   */
+  const isUserHoldingRef = useRef<boolean>(false);
+  const restartCountRef = useRef<number>(0);
+  const MAX_RESTART = 10; // 上限 10 次（约 10 分钟）防失控
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -167,6 +176,9 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
 
     setErrorHint("");
     finalTranscriptRef.current = "";
+    // v0.4.2.5：进入录音 → 标记用户按住，重置重启计数
+    isUserHoldingRef.current = true;
+    restartCountRef.current = 0;
 
     const SR =
       (
@@ -216,9 +228,18 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
 
       recognition.onerror = (ev) => {
         gotAnyResponseRef.current = true;
+        const errType = ev?.error || "unknown";
+        // v0.4.2.5：致命错误强制退出自动重启循环，避免错误无限循环
+        const fatalErrors = new Set([
+          "not-allowed",
+          "audio-capture",
+          "service-not-allowed",
+        ]);
+        if (fatalErrors.has(errType)) {
+          isUserHoldingRef.current = false;
+        }
         setRecording(false);
         setRecognizing(false);
-        const errType = ev?.error || "unknown";
         if (errType === "not-allowed") {
           setErrorHint("请允许麦克风权限（设置里）");
         } else if (errType === "no-speech") {
@@ -242,14 +263,31 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
 
       recognition.onend = () => {
         gotAnyResponseRef.current = true;
+        // v0.4.2.5：长语音自动续接
+        // 用户还按着按钮 + 重启次数未超限 → 立即重启，文本累积不复位
+        if (
+          isUserHoldingRef.current &&
+          restartCountRef.current < MAX_RESTART
+        ) {
+          restartCountRef.current++;
+          try {
+            recogRef.current?.start();
+            // 不复位 recording、不清 finalTranscriptRef、不触发 onTranscript
+            return;
+          } catch {
+            // start() 失败（如同实例不能立刻重 start）→ 走原停止逻辑
+            isUserHoldingRef.current = false;
+          }
+        }
+        // 用户已松手 / 达到上限 / 重启失败 → 走原逻辑
         setRecording(false);
         setRecognizing(false);
-        // 录音/识别真正结束时，把累积的 final 文本一次性回传
         const finalText = finalTranscriptRef.current.trim();
         if (finalText) {
           onTranscript(finalText);
         }
         finalTranscriptRef.current = "";
+        restartCountRef.current = 0;
       };
 
       recogRef.current = recognition;
@@ -263,6 +301,8 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
       }
       silentFailTimerRef.current = window.setTimeout(() => {
         if (!gotAnyResponseRef.current) {
+          // v0.4.2.5：watchdog 触发也强制退出自动重启循环
+          isUserHoldingRef.current = false;
           markSRBroken();
           setUnsupportedReason("broken-once");
           setRecording(false);
@@ -276,6 +316,8 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
         }
       }, 4000);
     } catch (e) {
+      // v0.4.2.5：启动失败也退出循环
+      isUserHoldingRef.current = false;
       setRecording(false);
       markSRBroken();
       setUnsupportedReason("broken-once");
@@ -288,6 +330,9 @@ export function MicInput({ onTranscript, disabled }: MicInputProps) {
 
   function stopRecording() {
     if (!recording) return;
+    // v0.4.2.5：先把 holding 标记设 false，再调 stop()
+    // 否则 onend 会误判用户还按着 → 自动重启
+    isUserHoldingRef.current = false;
     setRecording(false);
     setRecognizing(true);
     try {

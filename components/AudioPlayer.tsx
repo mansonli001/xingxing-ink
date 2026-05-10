@@ -21,28 +21,24 @@ interface AudioPlayerProps {
   presetAudioUrl?: string;
 }
 
-type Status = "idle" | "loading" | "ready" | "playing" | "error";
-
 /**
- * v0.4.2：按钮文案中性化——不暴露音色花名（北京大妞/清冷阿梦/...），
- * 三档统一一套词，姐姐人设由内容自身体现。
+ * v0.4.2.5：新增 "paused" 状态，支持暂停/继续。
+ *   idle → loading → playing ⇄ paused → ended（→ idle 或 → 重播）
  */
-const LABELS = {
-  idle: "▶ 让她说说",
-  playing: "♪ 她在说话",
-  loading: "正在熬一遍……",
-  retry: "♻ 重试",
-};
+type Status =
+  | "idle"
+  | "loading"
+  | "playing"
+  | "paused"
+  | "ended"
+  | "error";
 
 /* ------------------------------------------------------------------
- * v0.4.1 模块级 Blob 缓存
- * key = `${mode}::${textHash}`
+ * v0.4.1 模块级 Blob 缓存（v0.4.2.5 完整保留，一行不动）
+ * key = `${mode}::${textHash}::${textLength}`
  * value = blob URL（已 createObjectURL，可直接给 audio.src）
- *
  * 命中：第二次点击 0 延迟立即播放
- * 未命中：fetch + 入缓存
- * 单次会话内有效（页面刷新即清空，不持久）
- * 控制：最多 50 条，超出后 FIFO 淘汰
+ * 单次会话内有效（页面刷新即清空），最多 50 条 FIFO 淘汰
  * ----------------------------------------------------------------- */
 const MAX_CACHE = 50;
 const blobCache = new Map<string, string>();
@@ -50,7 +46,6 @@ const blobCache = new Map<string, string>();
 function djb2Hash(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
-  // 转 32 位无符号 + 36 进制压缩
   return (h >>> 0).toString(36);
 }
 
@@ -70,6 +65,14 @@ function setCache(key: string, url: string) {
   blobCache.set(key, url);
 }
 
+/** 把秒数格式化成 "0:12" / "1:05" */
+function formatTime(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export function AudioPlayer({
   text,
   mode = "casual",
@@ -79,27 +82,37 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const triedAutoPlay = useRef(false);
 
-  // 播放状态变化时主动通知上层
+  // 播放状态变化时通知上层（playing/paused 都算"在播"，让人像继续呼吸最自然
+  // 但当前需求里只有"她在说话"才呼吸，因此只在 playing 时为 true）
   useEffect(() => {
     onPlayingChange?.(status === "playing");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  async function generate() {
+  /** 加载音频源（预制直链或 TTS 合成 + 缓存命中） */
+  async function loadAndPlay() {
     if (status === "loading") return;
     setErrorMsg("");
 
-    // v0.4.2：预制音频路径优先 —— 跳过缓存查找和 /api/tts 调用
-    if (presetAudioUrl && audioRef.current) {
-      audioRef.current.src = presetAudioUrl;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // v0.4.2：预制音频路径优先（跳过 /api/tts）
+    if (presetAudioUrl) {
+      if (audio.src !== window.location.origin + presetAudioUrl) {
+        audio.src = presetAudioUrl;
+      }
       try {
-        await audioRef.current.play();
+        await audio.play();
         setStatus("playing");
       } catch {
-        setStatus("ready");
+        setStatus("error");
+        setErrorMsg("浏览器拒绝自动播放，请再点一次");
       }
       return;
     }
@@ -107,20 +120,20 @@ export function AudioPlayer({
     const cacheKey = getCacheKey(mode, text);
     const cachedUrl = blobCache.get(cacheKey);
 
-    // 缓存命中：直接播放，不走 loading（0 延迟）
-    if (cachedUrl && audioRef.current) {
-      audioRef.current.src = cachedUrl;
+    // 缓存命中：0 延迟
+    if (cachedUrl) {
+      if (audio.src !== cachedUrl) audio.src = cachedUrl;
       try {
-        await audioRef.current.play();
+        await audio.play();
         setStatus("playing");
-        return;
       } catch {
-        // 自动播放被浏览器拒绝时降级到 ready 状态，让用户手动点 audio 控件
-        setStatus("ready");
-        return;
+        setStatus("error");
+        setErrorMsg("浏览器拒绝自动播放，请再点一次");
       }
+      return;
     }
 
+    // 缓存未命中：去 /api/tts 合成
     setStatus("loading");
     try {
       const res = await fetch("/api/tts", {
@@ -135,10 +148,8 @@ export function AudioPlayer({
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setCache(cacheKey, url);
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        await audioRef.current.play().catch(() => {});
-      }
+      audio.src = url;
+      await audio.play().catch(() => {});
       setStatus("playing");
     } catch (e) {
       setStatus("error");
@@ -146,67 +157,189 @@ export function AudioPlayer({
     }
   }
 
+  /** 暂停 */
+  function pause() {
+    audioRef.current?.pause();
+    setStatus("paused");
+  }
+
+  /** 继续 / ended 后重播 / error 后重试 */
+  async function resumeOrReplay() {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // ended 后从头重播（src 已存在）
+    if (status === "ended" && audio.src) {
+      audio.currentTime = 0;
+      try {
+        await audio.play();
+        setStatus("playing");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    // paused 继续
+    if (status === "paused" && audio.src) {
+      try {
+        await audio.play();
+        setStatus("playing");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    // error / idle / loading 重新加载
+    loadAndPlay();
+  }
+
+  // autoPlay 触发
   useEffect(() => {
     if (autoPlay && !triedAutoPlay.current && text.length > 0) {
       triedAutoPlay.current = true;
-      generate();
+      loadAndPlay();
     }
-    // 注意：不再在 unmount 时 revokeObjectURL，因为 URL 进了模块级缓存共享
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay, text]);
 
-  const mainLabel =
-    status === "loading"
-      ? LABELS.loading
-      : status === "playing"
-      ? LABELS.playing
-      : status === "error"
-      ? LABELS.retry
-      : LABELS.idle;
+  // 主按钮（最左）：根据状态切换 label + 行为
+  function MainButton() {
+    if (status === "loading") {
+      return (
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center gap-1.5 rounded-md border border-xx-border/60 px-2.5 py-1 text-[12px] text-xx-text-dim opacity-70 cursor-wait animate-pulse"
+        >
+          ✦ 正在熬一遍…
+        </button>
+      );
+    }
 
-  return (
-    <div className="flex items-center gap-2 mt-2 text-xs text-xx-text-dim">
+    if (status === "playing") {
+      // 暂停按钮（紧凑 28×28）
+      return (
+        <button
+          type="button"
+          onClick={pause}
+          aria-label="暂停"
+          title="暂停"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-xx-gold/60 text-xx-gold hover:bg-xx-gold/10 transition-colors shrink-0"
+        >
+          <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="5" width="4" height="14" rx="1" />
+            <rect x="14" y="5" width="4" height="14" rx="1" />
+          </svg>
+        </button>
+      );
+    }
+
+    if (status === "paused") {
+      // 继续按钮（紧凑 28×28）
+      return (
+        <button
+          type="button"
+          onClick={resumeOrReplay}
+          aria-label="继续"
+          title="继续"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-xx-gold/60 text-xx-gold hover:bg-xx-gold/10 transition-colors shrink-0"
+        >
+          <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden="true">
+            <path d="M7 5v14l12-7z" />
+          </svg>
+        </button>
+      );
+    }
+
+    if (status === "ended") {
+      return (
+        <button
+          type="button"
+          onClick={resumeOrReplay}
+          className="inline-flex items-center gap-1.5 rounded-md border border-xx-border/60 hover:border-xx-gold hover:text-xx-gold px-2.5 py-1 text-[12px] text-xx-text-dim transition-colors"
+        >
+          ▶ 再听一遍
+        </button>
+      );
+    }
+
+    if (status === "error") {
+      return (
+        <button
+          type="button"
+          onClick={resumeOrReplay}
+          className="inline-flex items-center gap-1.5 rounded-md border border-xx-red text-xx-red px-2.5 py-1 text-[12px] hover:bg-xx-red/10 transition-colors"
+        >
+          ♻ 重试
+        </button>
+      );
+    }
+
+    // idle
+    return (
       <button
         type="button"
-        onClick={generate}
-        disabled={status === "loading"}
-        className={[
-          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 transition-colors",
-          status === "error"
-            ? "border-xx-red text-xx-red"
-            : "border-xx-border hover:border-xx-gold hover:text-xx-gold",
-          status === "loading" ? "opacity-60 cursor-wait" : "",
-        ].join(" ")}
+        onClick={loadAndPlay}
+        className="inline-flex items-center gap-1.5 rounded-md border border-xx-border/60 hover:border-xx-gold hover:text-xx-gold px-2.5 py-1 text-[12px] text-xx-text-dim transition-colors"
       >
-        <span
-          className={
-            status === "loading"
-              ? "animate-pulse"
-              : status === "playing"
-              ? "text-xx-gold"
-              : ""
-          }
-        >
-          {mainLabel}
-        </span>
+        ▶ 让她说说
       </button>
+    );
+  }
+
+  // 进度条 + 时间戳：playing / paused 状态下显示，半透明融入气泡
+  const showProgress = status === "playing" || status === "paused";
+  const progressPct =
+    duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2">
+      <MainButton />
+
+      {/* 进度条（半透明 1px 金色细线，flex-wrap 时手机端不溢出气泡） */}
+      {showProgress && (
+        <>
+          <div className="flex-1 min-w-[60px] max-w-full h-px bg-xx-border/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-xx-gold/70 transition-[width] duration-200 ease-linear"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-xx-text-dim/80 tabular-nums shrink-0">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </>
+      )}
+
+      {/* 错误文案（在状态为 error 时显示，不破坏布局） */}
+      {status === "error" && errorMsg && (
+        <span className="text-[11px] text-xx-red/80 shrink-0">{errorMsg}</span>
+      )}
+
+      {/* 隐藏的 audio 播放引擎——永久 hidden，无 controls，纯靠 React state 驱动 UI */}
       <audio
         ref={audioRef}
-        controls
-        className={status === "idle" || status === "loading" ? "hidden" : ""}
-        onEnded={() => setStatus("ready")}
+        className="hidden"
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const a = e.currentTarget;
+          if (Number.isFinite(a.duration)) setDuration(a.duration);
+        }}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => {
+          setStatus("ended");
+          setCurrentTime(0);
+        }}
         onPlay={() => setStatus("playing")}
-        onPause={() =>
-          setStatus((s) => (s === "playing" ? "ready" : s))
-        }
+        onPause={() => {
+          // onPause 会在 ended 时也触发；只有当前状态是 playing 时才转 paused
+          setStatus((s) => (s === "playing" ? "paused" : s));
+        }}
         onError={() => {
           setStatus("error");
           setErrorMsg("音频播放失败");
         }}
       />
-      {errorMsg ? (
-        <span className="text-xx-red text-xs ml-1">{errorMsg}</span>
-      ) : null}
     </div>
   );
 }

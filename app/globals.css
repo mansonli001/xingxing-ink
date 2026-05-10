@@ -458,8 +458,10 @@ h3,
 
   /* v9：色调统一 + 极克制的边缘羽化（drop-shadow 0.6px 模糊半径，
      只在像素硬切边缘起作用，脸/眼/嘴/衣服肌理 100% 清晰不糊） */
+  /* v0.4.2.5：剪影模糊化——blur(16px) 让人像变成磨砂玻璃后的人影感（神秘、克制、不轻佻）
+     saturate(0.78) 进一步降饱和，避免模糊后还是粉嫩美女图，更接近"人影" */
   filter:
-    brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg)
+    blur(16px) brightness(0.95) contrast(1.05) saturate(0.78) hue-rotate(-2deg)
     drop-shadow(0 0 0.6px rgba(14, 10, 24, 0.55));
 
   /* v8.3：基于真实测量数据 + 更低透明度
@@ -469,15 +471,16 @@ h3,
   opacity: 0;
   transition: opacity 1.1s cubic-bezier(0.33, 1, 0.68, 1);
 }
-/* v0.4.2.4 透明度三档系统：
-   ① 默认（首屏未对话）：0.32 若隐若现，神秘感，避免轻佻
-   ② 对话已开始（has-messages）：0.55 中度可见
-   ③ AI 正在说话（speaking）：呼吸时 opacity 推到 0.85（在 keyframe 里做） */
+/* v0.4.2.5 透明度统一克制：
+   ① 默认（首屏未对话）：0.32 + blur(16px)，磨砂玻璃后的人影
+   ② 对话已开始（has-messages）：保持 0.32 + blur(16px)，全程克制不抢戏
+   ③ AI 正在说话（speaking）：呼吸时 blur 减半到 8px + opacity 推到 0.7（在 keyframe 里做）
+   —— 营造"她认真说话时浮现出来"而非"突然变亮"的感觉 */
 .silhouette-img[data-active="true"] {
   opacity: 0.32;
 }
 .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-  opacity: 0.55;
+  opacity: 0.32;
 }
 
 /* v8.3 基于测量：rational 脸中心比 casual 靠上 1.1% → 下移 1% */
@@ -490,60 +493,59 @@ h3,
 }
 
 /* ============================================================
- * v0.4.2.4 人像呼吸动效（v0.4 → v0.4.2.4 大幅增强）
+ * v0.4.2.5 人像呼吸动效（在 v0.4.2.4 基础上增加剪影/浮现感）
  *
- * 旧版 scale 1 → 1.012（约 1.5px 浮动 + 透明度不变）→ 用户看不见
- * 新版三重叠加：
+ * 谷（0%/100%）：blur 16px + opacity 0.32（磨砂玻璃感）
+ * 峰（50%）：blur 减半到 8px + opacity 0.7（"浮现"——她在认真说话时走近一步）
  *   · scale: 1 → 1.04 → 1（约 5-6px 浮动，肉眼可感知）
- *   · opacity: 0.55 → 0.85 → 0.55（明显的"显形"）
  *   · drop-shadow 金色光晕同步呼吸（让用户更清楚知道"她在说话"）
  * 周期 2.6s（接近真人放松时呼吸频率），ease-in-out 自然过渡
  * ============================================================ */
 @keyframes xx-breathe-casual {
   0%, 100% {
     transform: translateY(0) scale(1) translateZ(0);
-    opacity: 0.55;
+    opacity: 0.32;
     filter:
-      brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg)
+      blur(16px) brightness(0.95) contrast(1.05) saturate(0.78) hue-rotate(-2deg)
       drop-shadow(0 0 0.6px rgba(14, 10, 24, 0.55));
   }
   50% {
     transform: translateY(-0.5%) scale(1.04) translateZ(0);
-    opacity: 0.85;
+    opacity: 0.7;
     filter:
-      brightness(1.02) contrast(1.05) saturate(0.95) hue-rotate(-2deg)
+      blur(8px) brightness(1.02) contrast(1.05) saturate(0.85) hue-rotate(-2deg)
       drop-shadow(0 0 14px rgba(184, 138, 79, 0.35));
   }
 }
 @keyframes xx-breathe-rational {
   0%, 100% {
     transform: translateY(1%) scale(1) translateZ(0);
-    opacity: 0.55;
+    opacity: 0.32;
     filter:
-      brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg)
+      blur(16px) brightness(0.95) contrast(1.05) saturate(0.78) hue-rotate(-2deg)
       drop-shadow(0 0 0.6px rgba(14, 10, 24, 0.55));
   }
   50% {
     transform: translateY(0.5%) scale(1.04) translateZ(0);
-    opacity: 0.85;
+    opacity: 0.7;
     filter:
-      brightness(1.02) contrast(1.05) saturate(0.95) hue-rotate(-2deg)
+      blur(8px) brightness(1.02) contrast(1.05) saturate(0.85) hue-rotate(-2deg)
       drop-shadow(0 0 14px rgba(184, 138, 79, 0.35));
   }
 }
 @keyframes xx-breathe-scathing {
   0%, 100% {
     transform: translateY(2%) scale(1) translateZ(0);
-    opacity: 0.55;
+    opacity: 0.32;
     filter:
-      brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg)
+      blur(16px) brightness(0.95) contrast(1.05) saturate(0.78) hue-rotate(-2deg)
       drop-shadow(0 0 0.6px rgba(14, 10, 24, 0.55));
   }
   50% {
     transform: translateY(1.5%) scale(1.04) translateZ(0);
-    opacity: 0.85;
+    opacity: 0.7;
     filter:
-      brightness(1.02) contrast(1.05) saturate(0.95) hue-rotate(-2deg)
+      blur(8px) brightness(1.02) contrast(1.05) saturate(0.85) hue-rotate(-2deg)
       drop-shadow(0 0 14px rgba(184, 138, 79, 0.35));
   }
 }
@@ -641,12 +643,12 @@ h3,
     height: 62%;
     max-width: 62%;
   }
-  /* v0.4.2.4：手机端透明度同步降低，首屏若隐若现 */
+  /* v0.4.2.5：手机端透明度统一克制 0.30，全程剪影感 */
   .silhouette-img[data-active="true"] {
     opacity: 0.30;
   }
   .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-    opacity: 0.50;
+    opacity: 0.30;
   }
   .silhouette-img[src*="rational"] {
     transform: translateY(1%) translateZ(0);
@@ -679,11 +681,12 @@ h3,
     height: 84%;
     max-width: 58%;
   }
+  /* v0.4.2.5：平板透明度统一克制 0.32 */
   .silhouette-img[data-active="true"] {
     opacity: 0.32;
   }
   .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-    opacity: 0.55;
+    opacity: 0.32;
   }
   .silhouette-img[src*="rational"] {
     transform: translateY(1%) translateZ(0);

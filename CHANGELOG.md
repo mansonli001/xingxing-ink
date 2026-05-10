@@ -8,6 +8,58 @@
 
 ---
 
+## [v0.4.1] - 2026-05-10 — 「换御姐音色 + 整体提速 + 点击 0 延迟」
+
+> 一句话总结：v0.4.0 的顾姐台湾腔太重，换成傲娇女友 ICL 音色；三档语速统一升到 1.3x；前端加 Blob 缓存让"同一段话重听"瞬间响应。
+
+### Changed —— 扇巴掌音色：顾姐 → 傲娇女友（ICL）
+
+```diff
+- speaker: "zh_female_gujie_uranus_bigtts"          // uranus 2.0
+- resourceId: "seed-tts-2.0"
++ speaker: "ICL_zh_female_aojiaonvyou_tob"          // ICL 1.0
++ resourceId: "seed-tts-1.0"
+```
+
+- 顾姐版本台湾腔过重，整体气质偏温软不够"扇巴掌"
+- 改用 ICL 公版"傲娇女友"，普通话标准、有距离感、自带嘲讽尾音
+- 注意：ICL 系列走 `seed-tts-1.0`，VoiceProfile 现在每档自带 `resourceId`，环境变量 `VOLC_RESOURCE_ID` 不再使用
+
+### Changed —— 三档语速整体提速 ~1.3x
+
+| mode | 旧 speech_rate | 新 speech_rate | 等效倍速 |
+|---|---|---|---|
+| casual | 0 | 30 | ~1.3x |
+| rational | 5 | 30 | ~1.3x |
+| scathing | -5 | 25 | ~1.25x（保留冷感拖音） |
+
+- 火山速率范围 -50~100，30 ≈ 1.3x（线性映射 (1.3-1.0)/(2.0-1.0) × 100）
+- scathing 保持比另两档慢一点点，不丢"高冷拖腔"
+
+### Added —— 前端 Blob 缓存（解决"点击反应慢"）
+
+- `components/AudioPlayer.tsx` 新增**模块级 Map 缓存**：
+  - key: `${mode}::${djb2Hash(text)}::${text.length}`
+  - value: Blob URL（已 createObjectURL）
+- 缓存命中：第二次点击同一气泡的喇叭 → **0 延迟**直接 audio.play()，不发请求
+- 缓存未命中：fetch 后塞入缓存（FIFO 上限 50 条，超出淘汰最早的）
+- 单次会话内有效，刷新页面清空，不持久化（不挤占 localStorage）
+
+### Why click feels slow
+
+物理延迟：火山 TTS 合成 200 字约 3-5s 不可避免。但**重复点击同一段话**之前没缓存，每次都重新合成；现在有缓存后体感：
+- 第一次：仍然 3-5s（写「正在熬一遍……」）
+- 第二次起：< 100ms（瞬发）
+
+未来如果想首次延迟也降低，可以接 v3 WebSocket 流式（首字节 < 1s 就开始播），但 Vercel Serverless 不兼容，留作 v0.5+ 升级到 Edge Runtime 时再考虑。
+
+### Removed
+
+- `lib/volcano-tts.ts` 不再读取 `VOLC_RESOURCE_ID` 环境变量（resourceId 由音色档位决定）
+- 但 `.env.local` 里保留该变量不会出错（被忽略）
+
+---
+
 ## [v0.4.0] - 2026-05-10 — 「她开口了 · 三档姐姐有声 + 人像呼吸 + 麦克风输入」
 
 > 一句话总结：接入火山引擎豆包语音合成 2.0，三档人设各拿到专属女声音色，AI 说话时对应人像极轻微呼吸脉动，输入框新增麦克风按钮长按录音。

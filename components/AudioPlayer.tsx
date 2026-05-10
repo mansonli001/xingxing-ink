@@ -28,6 +28,42 @@ const MODE_LABELS: Record<
   scathing: { idle: "▶ 听高冷御姐", playing: "♪ 高冷御姐正在说" },
 };
 
+/* ------------------------------------------------------------------
+ * v0.4.1 模块级 Blob 缓存
+ * key = `${mode}::${textHash}`
+ * value = blob URL（已 createObjectURL，可直接给 audio.src）
+ *
+ * 命中：第二次点击 0 延迟立即播放
+ * 未命中：fetch + 入缓存
+ * 单次会话内有效（页面刷新即清空，不持久）
+ * 控制：最多 50 条，超出后 FIFO 淘汰
+ * ----------------------------------------------------------------- */
+const MAX_CACHE = 50;
+const blobCache = new Map<string, string>();
+
+function djb2Hash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
+  // 转 32 位无符号 + 36 进制压缩
+  return (h >>> 0).toString(36);
+}
+
+function getCacheKey(mode: AudioMode, text: string): string {
+  return `${mode}::${djb2Hash(text)}::${text.length}`;
+}
+
+function setCache(key: string, url: string) {
+  if (blobCache.size >= MAX_CACHE) {
+    const firstKey = blobCache.keys().next().value;
+    if (firstKey) {
+      const oldUrl = blobCache.get(firstKey);
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      blobCache.delete(firstKey);
+    }
+  }
+  blobCache.set(key, url);
+}
+
 export function AudioPlayer({
   text,
   mode = "casual",
@@ -37,20 +73,36 @@ export function AudioPlayer({
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const urlRef = useRef<string | null>(null);
   const triedAutoPlay = useRef(false);
 
   // 播放状态变化时主动通知上层
   useEffect(() => {
     onPlayingChange?.(status === "playing");
-    // 仅在 status 变化时触发，onPlayingChange 可能 ref 不稳定，故不放依赖
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   async function generate() {
     if (status === "loading") return;
-    setStatus("loading");
     setErrorMsg("");
+
+    const cacheKey = getCacheKey(mode, text);
+    const cachedUrl = blobCache.get(cacheKey);
+
+    // 缓存命中：直接播放，不走 loading（0 延迟）
+    if (cachedUrl && audioRef.current) {
+      audioRef.current.src = cachedUrl;
+      try {
+        await audioRef.current.play();
+        setStatus("playing");
+        return;
+      } catch {
+        // 自动播放被浏览器拒绝时降级到 ready 状态，让用户手动点 audio 控件
+        setStatus("ready");
+        return;
+      }
+    }
+
+    setStatus("loading");
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
@@ -62,9 +114,8 @@ export function AudioPlayer({
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const blob = await res.blob();
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       const url = URL.createObjectURL(blob);
-      urlRef.current = url;
+      setCache(cacheKey, url);
       if (audioRef.current) {
         audioRef.current.src = url;
         await audioRef.current.play().catch(() => {});
@@ -81,9 +132,7 @@ export function AudioPlayer({
       triedAutoPlay.current = true;
       generate();
     }
-    return () => {
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-    };
+    // 注意：不再在 unmount 时 revokeObjectURL，因为 URL 进了模块级缓存共享
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay, text]);
 

@@ -28,41 +28,59 @@
 
 export type ModeId = "casual" | "rational" | "scathing";
 
-/** 每档人设的音色配置：speaker + emotion + speech_rate */
+/** 每档人设的音色配置：speaker + emotion + speech_rate + resourceId */
 interface VoiceProfile {
   /** 火山 voice_type（api 层叫 speaker） */
   speaker: string;
   /** 产品昵称（仅日志） */
   displayName: string;
   /**
+   * 模型路由（Header X-Api-Resource-Id）：
+   *   seed-tts-2.0 → uranus 系列音色（豆包语音合成 2.0）
+   *   seed-tts-1.0 → ICL / mars / moon / saturn 等音色（豆包语音合成 1.0）
+   */
+  resourceId: "seed-tts-2.0" | "seed-tts-1.0" | "seed-tts-1.0-concurr";
+  /**
    * 情感（2.0 音色支持）：
    * happy / sad / angry / surprised / fear / hate /
    * excited / coldness / neutral / ...
-   * 部分 uranus 音色可能不识别此参数，但火山会降级不报错
+   * 1.0 音色不识别此参数，火山会忽略
    */
   emotion?: string;
-  /** 语速 -50~100，0 原速，100 是 2 倍速，-50 是 0.5 倍速 */
+  /** 语速 -50~100（0=原速，100=2倍速，-50=0.5倍速）。30 ≈ 1.3倍速 */
   speech_rate?: number;
 }
 
+/**
+ * 三档人设 ↔ 音色映射
+ *
+ * 速度策略（v0.4.1）：基线 1.3x（speech_rate=30），
+ *   - casual / rational：30（1.3x，自然不拖）
+ *   - scathing：25（1.25x，比另外两档略慢，给冷感留拖音空间）
+ */
 const VOICE_CONFIG: Record<ModeId, VoiceProfile> = {
   casual: {
     speaker: "zh_female_qingchezizi_uranus_bigtts",
-    displayName: "清澈梓梓",
+    displayName: "清澈梓梓（北京大妞）",
+    resourceId: "seed-tts-2.0",
     emotion: "neutral",
-    speech_rate: 0,
+    speech_rate: 30,
   },
   rational: {
     speaker: "zh_female_lingling_uranus_bigtts",
-    displayName: "玲玲",
+    displayName: "玲玲（清冷阿梦）",
+    resourceId: "seed-tts-2.0",
     emotion: "calm",
-    speech_rate: 5,
+    speech_rate: 30,
   },
   scathing: {
-    speaker: "zh_female_gujie_uranus_bigtts",
-    displayName: "顾姐",
+    // v0.4.1 换：原 zh_female_gujie_uranus_bigtts 顾姐台湾腔过重
+    speaker: "ICL_zh_female_aojiaonvyou_tob",
+    displayName: "傲娇女友（高冷御姐）",
+    resourceId: "seed-tts-1.0",
+    // ICL 1.0 音色不识别 emotion 字段，但保留也无妨
     emotion: "coldness",
-    speech_rate: -5,
+    speech_rate: 25,
   },
 };
 
@@ -113,7 +131,9 @@ export async function synthesizeSpeech(
   }
 
   const apiKey = getEnv("VOLC_API_KEY");
-  const resourceId = process.env.VOLC_RESOURCE_ID || "seed-tts-2.0";
+  // resourceId 由音色档位决定（uranus 走 2.0，ICL 走 1.0），
+  // 不再从环境变量读取——一台应用同时跑两个版本是常态
+  const resourceId = profile.resourceId;
   // VOLC_APP_ID 在新版控制台鉴权下不需要发给火山，但读出来用于追踪/日志
   void process.env.VOLC_APP_ID;
 

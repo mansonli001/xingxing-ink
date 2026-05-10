@@ -1,54 +1,52 @@
 import { NextRequest } from "next/server";
-import { synthesizeSpeech } from "@/lib/eleven";
+import { synthesizeSpeech, type ModeId } from "@/lib/volcano-tts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface TTSRequestBody {
   text: string;
-  voice_id?: string;
-  stability?: number;
-  similarity_boost?: number;
-  style?: number;
+  /** 当前对话模式，决定用哪档音色（默认 casual） */
+  mode?: ModeId;
 }
+
+const VALID_MODES: ModeId[] = ["casual", "rational", "scathing"];
 
 /**
  * 文本预处理：去除 Markdown 标记，让 TTS 朗读更自然
+ * （沿用 v0.3 原有的清洗规则）
  */
 function stripMarkdownForTTS(text: string): string {
   return text
-    // 移除代码块
     .replace(/```[\s\S]*?```/g, "")
-    // 移除行内代码反引号
     .replace(/`([^`]+)`/g, "$1")
-    // 移除标题井号
     .replace(/^#{1,6}\s+/gm, "")
-    // 移除粗体/斜体标记
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
-    // 移除链接，保留文字
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    // 移除列表符号
     .replace(/^[\s]*[-*+]\s+/gm, "")
     .replace(/^[\s]*\d+\.\s+/gm, "")
-    // 多余空行折叠
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 export async function POST(req: NextRequest) {
-  // 服务端二道关：开关未启用 / 未配 Key → 直接劝退，不去碰 ElevenLabs
+  // 服务端二道关：开关未启用 / 未配 Key → 直接劝退
   if (process.env.NEXT_PUBLIC_TTS_ENABLED !== "true") {
     return new Response(
-      JSON.stringify({ error: "语音功能未启用（NEXT_PUBLIC_TTS_ENABLED=false）" }),
+      JSON.stringify({
+        error: "语音功能未启用（NEXT_PUBLIC_TTS_ENABLED=false）",
+      }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
-  if (!process.env.ELEVEN_API_KEY || process.env.ELEVEN_API_KEY.startsWith("xi-xxx")) {
+  if (!process.env.VOLC_API_KEY) {
     return new Response(
-      JSON.stringify({ error: "未配置 ELEVEN_API_KEY，无法合成语音" }),
+      JSON.stringify({
+        error: "未配置火山引擎 API Key（VOLC_API_KEY）",
+      }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -71,6 +69,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const mode: ModeId =
+    body.mode && VALID_MODES.includes(body.mode) ? body.mode : "casual";
+
   const text = stripMarkdownForTTS(rawText);
   if (!text) {
     return new Response(
@@ -80,22 +81,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { audio, contentType } = await synthesizeSpeech({
-      text,
-      voiceId: body.voice_id,
-      stability: body.stability,
-      similarityBoost: body.similarity_boost,
-      style: body.style,
-    });
-
+    const { audio, contentType } = await synthesizeSpeech({ text, mode });
     return new Response(audio, {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "private, max-age=300",
+        "X-Voice-Mode": mode,
       },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "TTS 合成失败";
+    console.error("[/api/tts] volcano error:", msg);
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

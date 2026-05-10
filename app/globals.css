@@ -482,6 +482,48 @@ h3,
   transform: translateY(2%) translateZ(0);
 }
 
+/* ============================================================
+ * v0.4 人像呼吸动效：AI 语音播放时，当前活动人像 2.8 秒一次极轻微脉动
+ * scale 1 → 1.012 → 1 （约 1.5px，不影响人脸美观）
+ * 三档独立 @keyframes，叠加各自 translateY 基线
+ * ============================================================ */
+@keyframes xx-breathe-casual {
+  0%, 100% { transform: translateY(0) scale(1) translateZ(0); }
+  50%      { transform: translateY(0) scale(1.012) translateZ(0); }
+}
+@keyframes xx-breathe-rational {
+  0%, 100% { transform: translateY(1%) scale(1) translateZ(0); }
+  50%      { transform: translateY(1%) scale(1.012) translateZ(0); }
+}
+@keyframes xx-breathe-scathing {
+  0%, 100% { transform: translateY(2%) scale(1) translateZ(0); }
+  50%      { transform: translateY(2%) scale(1.012) translateZ(0); }
+}
+.silhouette-img[data-active="true"][data-speaking="true"][src*="casual"] {
+  animation: xx-breathe-casual 2.8s ease-in-out infinite;
+}
+.silhouette-img[data-active="true"][data-speaking="true"][src*="rational"] {
+  animation: xx-breathe-rational 2.8s ease-in-out infinite;
+}
+.silhouette-img[data-active="true"][data-speaking="true"][src*="scathing"] {
+  animation: xx-breathe-scathing 2.8s ease-in-out infinite;
+}
+
+/* ============================================================
+ * v0.4 麦克风按钮录音脉动
+ * ============================================================ */
+@keyframes xx-mic-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(184, 138, 79, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(184, 138, 79, 0.12);
+  }
+}
+.mic-pulse {
+  animation: xx-mic-pulse 1.2s ease-in-out infinite;
+}
+
 /* 玫瑰紫色融合层：与人物 multiply 混合，把白衣/肤色统一染到页面色调
    v6：人物放大到 60% 宽，紫色层同步扩大到 62%，覆盖完整人物范围
    只在最外圈强一点，中心区（脸部）几乎不染 */

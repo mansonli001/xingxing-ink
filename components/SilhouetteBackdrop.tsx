@@ -14,6 +14,8 @@ import type { ModeId } from "./modeMeta";
 interface SilhouetteBackdropProps {
   mode: ModeId;
   hasMessages?: boolean;
+  /** v0.4：是否正在播放 AI 语音；true 时当前活动人像呼吸脉动 */
+  speaking?: boolean;
 }
 
 const SILHOUETTE_SRC: Record<ModeId, string> = {
@@ -27,11 +29,13 @@ const MODES: ModeId[] = ["casual", "rational", "scathing"];
 export function SilhouetteBackdrop({
   mode,
   hasMessages = false,
+  speaking = false,
 }: SilhouetteBackdropProps) {
   return (
     <div
       className="silhouette-backdrop"
       data-has-messages={hasMessages ? "true" : "false"}
+      data-speaking={speaking ? "true" : "false"}
       aria-hidden="true"
     >
       {/* 三张图叠在一起，通过 opacity 切换，避免切换时闪白 */}
@@ -42,6 +46,7 @@ export function SilhouetteBackdrop({
           alt=""
           className="silhouette-img"
           data-active={m === mode ? "true" : "false"}
+          data-speaking={m === mode && speaking ? "true" : "false"}
           loading={m === mode ? "eager" : "lazy"}
         />
       ))}

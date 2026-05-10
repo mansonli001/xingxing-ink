@@ -22,16 +22,19 @@ export interface ChatMessageItem {
 
 interface MessageBubbleProps {
   message: ChatMessageItem;
-  /** 是否为最新一条 AI 消息（用于自动播放语音） */
+  /** 是否为最新一条 AI 消息（保留参数、MVP 不再自动播音） */
   isLatestAssistant?: boolean;
   /** 点击「追问这一段」时的回调：把 AI 那句话引用到输入框 */
   onQuoteReply?: (quotedText: string) => void;
+  /** 上传播放状态到 Chat：供人像呼吸动效订阅（v0.4） */
+  onSpeakingChange?: (speaking: boolean) => void;
 }
 
 export function MessageBubble({
   message,
   isLatestAssistant,
   onQuoteReply,
+  onSpeakingChange,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const meta = message.mode ? MODE_META[message.mode] : MODE_META.scathing;
@@ -106,7 +109,12 @@ export function MessageBubble({
             )}
           </div>
           {message.done && message.content.length > 0 && TTS_ENABLED ? (
-            <AudioPlayer text={message.content} autoPlay={!!isLatestAssistant} />
+            <AudioPlayer
+              text={message.content}
+              mode={message.mode || "casual"}
+              autoPlay={false}
+              onPlayingChange={onSpeakingChange}
+            />
           ) : null}
         </div>
         {showActions ? (

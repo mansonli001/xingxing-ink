@@ -8,6 +8,80 @@
 
 ---
 
+## [v0.4.0] - 2026-05-10 — 「她开口了 · 三档姐姐有声 + 人像呼吸 + 麦克风输入」
+
+> 一句话总结：接入火山引擎豆包语音合成 2.0，三档人设各拿到专属女声音色，AI 说话时对应人像极轻微呼吸脉动，输入框新增麦克风按钮长按录音。
+
+### Added —— 语音回聊（TTS）
+
+- **三档人设 ↔ 专属音色（uranus 2.0 系列）**：
+  | mode | 产品昵称 | voice_type | 音色实身 | emotion | speech_rate |
+  |---|---|---|---|---|---|
+  | casual 随便聊 | 北京大妞 | `zh_female_qingchezizi_uranus_bigtts` | 清澈梓梓 | neutral | 0 |
+  | rational 讲道理 | 清冷阿梦 | `zh_female_lingling_uranus_bigtts` | 玲玲 | calm | +5 |
+  | scathing 扇巴掌 | 高冷御姐 | `zh_female_gujie_uranus_bigtts` | 顾姐 | coldness | -5 |
+- **接入协议**：HTTP Chunked 单向流 `POST /api/v3/tts/unidirectional`，Vercel Serverless 友好（不持久 WebSocket 连接）
+- **响应解析**：流式 NDJSON 逐行处理，base64 音频片段累积拼接，最后返回完整 mp3
+- **新版鉴权**：仅需 `X-Api-Key` + `X-Api-Resource-Id` 两个 Header（PDF 第 5-7 页规范，旧版的 X-Api-App-Id/X-Api-Access-Key 在新版控制台已废弃）
+- **MVP 不自动播放**：用户点喇叭按钮才合成 + 播放，节流省钱、尊重场景
+- **按钮文案按人设切换**：「听北京大妞 / 听清冷阿梦 / 听高冷御姐」
+- **加载文案**：`正在熬一遍……`（呼应产品 slogan「姐替你把想法熬一遍」）
+
+### Added —— 人像呼吸动效（视觉沉浸）
+
+- AI 说话时，当前 active 人像 2.8s 一次极轻微脉动，scale 1 → 1.012 → 1（约 1.5px）
+- 三档独立 `@keyframes`（xx-breathe-casual / -rational / -scathing），各自叠加现有 translateY 基线（rational +1%、scathing +2%）
+- 仅在 `data-active="true"` 且 `data-speaking="true"` 时启动，暂停/结束即归位
+- AudioPlayer 新增 `onPlayingChange` 回调，状态由 MessageBubble 上传到 Chat.isSpeaking，再下传到 SilhouetteBackdrop
+
+### Added —— 麦克风语音输入（ASR）
+
+- 输入框最左侧新增麦克风按钮，长按录音、松开识别
+- 使用浏览器原生 Web Speech API（中文 zh-CN）零成本
+- 浏览器不支持时按钮自动隐藏（不影响打字输入）
+- 录音时金色脉动 `mic-pulse` 动画提示
+- 识别结果自动追加到输入框尾部，用户可继续编辑后再发送
+- iPhone Safari：HTTPS only，本地 localhost 可用，线上 vercel 自动符合
+
+### Added —— 配置与开关
+
+- `.env.local` 新增 3 个变量：
+  - `VOLC_APP_ID=7514558310`
+  - `VOLC_API_KEY=********`（不入 git）
+  - `VOLC_RESOURCE_ID=seed-tts-2.0`
+  - `NEXT_PUBLIC_TTS_ENABLED=true`
+- `.env.example` 同步更新示例（占位值）
+- `NEXT_PUBLIC_TTS_ENABLED=false` 一键关停降级（前端不渲染喇叭按钮、后端 503）
+
+### Changed
+
+- `lib/eleven.ts` 不再被引用，但保留文件作为历史参考
+- `AudioPlayer.tsx` 完整重写：mode prop / 文案按 mode 切换 / onPlayingChange 状态回调
+- `MessageBubble.tsx`：`message.mode` 直接透传给 `<AudioPlayer mode>`，autoPlay 关闭
+- `SilhouetteBackdrop.tsx`：新增 `speaking` prop，落到根 div 和 active 人像 img 的 `data-speaking`
+
+### Verified Locally
+
+三档音色 API 端实测全部 HTTP 200：
+- casual: 27.6 KB MP3（24kHz mono）
+- rational: 63 KB MP3
+- scathing: 54.4 KB MP3
+- macOS `afplay` 三段全部正常发声，音色与豆包 APP 一致
+
+### Pending After Push
+
+- Vercel 控制面板手动配置 4 个环境变量（VOLC_API_KEY / VOLC_APP_ID / VOLC_RESOURCE_ID / NEXT_PUBLIC_TTS_ENABLED=true）
+- iPhone 真机测试：三档喇叭播放 + 人像呼吸 + 麦克风输入
+- 首次访问要授予浏览器麦克风权限
+
+### Cost Note
+
+- 火山 TTS 2.0 字符版：约 ¥20-30/百万字符
+- 一条 200 字 AI 回复 ≈ ¥0.006，月 10 元预算可支撑约 1700 次播放
+- 新用户首月通常有 50 万字符免费额度
+
+---
+
 ## [v0.3.5] - 2026-05-10 — 「人像下半身融入背景 · 双保险激进版（B 方案）」
 
 > 一句话总结：v0.3.4 的底部 mask 拉长效果在 iPhone 上依然僵硬，这次**双管齐下**：①人像 mask 底部 0→50% 全消散 + ②backdrop 叠加底部阴影压暗层（multiply 混合），彻底去掉"PS 贴图切底"感。

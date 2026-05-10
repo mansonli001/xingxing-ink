@@ -9,6 +9,7 @@ import {
 import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
 import { SilhouetteBackdrop } from "./SilhouetteBackdrop";
+import { MicInput } from "./MicInput";
 
 interface ChatProps {
   mode: ModeId;
@@ -30,6 +31,8 @@ export function Chat({
   clearAll,
 }: ChatProps) {
   const [input, setInput] = useState("");
+  /** v0.4：当前是否有 AI 消息在播放语音（驱动人像呼吸动效） */
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -90,7 +93,11 @@ export function Chat({
     <div className="relative flex h-full w-full flex-col" data-mode={mode}>
       {/* 全屏剪影背景 —— 视口级 fixed，滚动不跟跑、气泡区独立滚动
           放在最外层最前面，z-0 打底 */}
-      <SilhouetteBackdrop mode={mode} hasMessages={messages.length > 0} />
+      <SilhouetteBackdrop
+        mode={mode}
+        hasMessages={messages.length > 0}
+        speaking={isSpeaking}
+      />
 
       {/* 顶部：对话中显示"杠精风格"徽章（产品名 + 当前人格 + 轮次） */}
       {locked ? (
@@ -168,6 +175,7 @@ export function Chat({
                 message={m}
                 isLatestAssistant={m.id === latestAssistantId}
                 onQuoteReply={handleQuoteReply}
+                onSpeakingChange={setIsSpeaking}
               />
             ))
           )}
@@ -181,6 +189,17 @@ export function Chat({
           data-has-messages={messages.length > 0 ? "true" : "false"}
         >
           <div className="flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 focus-within:border-xx-gold transition-colors">
+            <MicInput
+              disabled={streaming}
+              onTranscript={(text) => {
+                setInput((prev) => {
+                  const sep = prev && !prev.endsWith(" ") ? " " : "";
+                  return prev + sep + text;
+                });
+                // 让用户立刻能看到 / 编辑
+                inputRef.current?.focus();
+              }}
+            />
             <textarea
               ref={inputRef}
               value={input}

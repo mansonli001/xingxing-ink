@@ -439,25 +439,28 @@ h3,
   -webkit-backface-visibility: hidden;
   transform: translateZ(0);
 
-  /* v8 mask 简化：图本身已透明（rembg AI 抠图），不再需要兜底纯黑遮挡
-     只做"和页面融合"的羽化：
-     - 左侧：让人物左边 10-25% 渐隐到透明，给气泡区干净空间
-     - 顶部：让发顶轻度羽化避免硬边
-     - 底部：让底边淡出避免硬切 */
+  /* v9 (v0.3.4) 融合升级：
+     左/上 mask 保持原值；底部 mask 拉长，让"大衣下摆消散在阴影里"，去除贴图感；
+     新增 drop-shadow 边缘羽化（极克制，只解决发丝硬切，不糊脸）。
+     - 左侧：人物左边 10-25% 渐隐到透明，给气泡区干净空间
+     - 顶部：发顶轻度羽化避免硬边
+     - 底部：从 14% → 30%，让大衣下摆从腰部以下逐渐消散（电影感"从黑暗浮现"） */
   -webkit-mask-image:
     linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
     linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
-    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.5) 5%, rgba(0,0,0,1) 14%);
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.4) 12%, rgba(0,0,0,0.85) 24%, rgba(0,0,0,1) 32%);
   -webkit-mask-composite: source-in;
   mask-image:
     linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
     linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
-    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.5) 5%, rgba(0,0,0,1) 14%);
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.4) 12%, rgba(0,0,0,0.85) 24%, rgba(0,0,0,1) 32%);
   mask-composite: intersect;
 
-  /* v8：移除 mix-blend-mode lighten（图已透明，不需要兜底）
-     只保留轻度色调统一 */
-  filter: brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg);
+  /* v9：色调统一 + 极克制的边缘羽化（drop-shadow 0.6px 模糊半径，
+     只在像素硬切边缘起作用，脸/眼/嘴/衣服肌理 100% 清晰不糊） */
+  filter:
+    brightness(0.95) contrast(1.05) saturate(0.88) hue-rotate(-2deg)
+    drop-shadow(0 0 0.6px rgba(14, 10, 24, 0.55));
 
   /* v8.3：基于真实测量数据 + 更低透明度
      三张图人物占画布比例都 94-97%，大小本身一致；

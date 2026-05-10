@@ -73,9 +73,10 @@ export function loadSystemPrompt(mode: ModeId): string {
   const main = fs.readFileSync(filePath, "utf-8");
 
   // v0.5.0：把弹药库以 reference 形式追加到主 prompt 末尾
+  // v0.6.0：F 段强化 forced choice（编号化 + ≥2/≥3 下限 + 反例黑名单）
   const arsenal = loadArsenal();
   const content = arsenal
-    ? `${main}\n\n# ============ 弹药库（产品经理硬通货 reference · v0.5.0） ============\n\n${arsenal}`
+    ? `${main}\n\n# ============ 弹药库（产品经理硬通货 reference · v0.6.0） ============\n\n${arsenal}`
     : main;
 
   if (!IS_DEV) promptCache[mode] = content;

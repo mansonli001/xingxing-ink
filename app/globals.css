@@ -440,20 +440,20 @@ h3,
   transform: translateZ(0);
 
   /* v9 (v0.3.4) 融合升级：
-     左/上 mask 保持原值；底部 mask 拉长，让"大衣下摆消散在阴影里"，去除贴图感；
+     左/上 mask 保持原值；底部 mask 大幅拉长，让"大衣下摆消散在阴影里"，去除贴图感；
      新增 drop-shadow 边缘羽化（极克制，只解决发丝硬切，不糊脸）。
      - 左侧：人物左边 10-25% 渐隐到透明，给气泡区干净空间
      - 顶部：发顶轻度羽化避免硬边
-     - 底部：从 14% → 30%，让大衣下摆从腰部以下逐渐消散（电影感"从黑暗浮现"） */
+     - 底部：从 14% → 50%，让大衣下摆从腰部以下整片消散（电影感"从黑暗浮现"） */
   -webkit-mask-image:
     linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
     linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
-    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.4) 12%, rgba(0,0,0,0.85) 24%, rgba(0,0,0,1) 32%);
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.3) 15%, rgba(0,0,0,0.7) 32%, rgba(0,0,0,1) 50%);
   -webkit-mask-composite: source-in;
   mask-image:
     linear-gradient(to right, transparent 0%, rgba(0,0,0,0.25) 8%, rgba(0,0,0,0.7) 18%, rgba(0,0,0,1) 28%),
     linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 4%, rgba(0,0,0,1) 10%),
-    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.4) 12%, rgba(0,0,0,0.85) 24%, rgba(0,0,0,1) 32%);
+    linear-gradient(to top, transparent 0%, rgba(0,0,0,0.3) 15%, rgba(0,0,0,0.7) 32%, rgba(0,0,0,1) 50%);
   mask-composite: intersect;
 
   /* v9：色调统一 + 极克制的边缘羽化（drop-shadow 0.6px 模糊半径，
@@ -495,13 +495,24 @@ h3,
   pointer-events: none;
   z-index: 2; /* 在人物之上，在气泡之下 */
   mix-blend-mode: multiply;
-  background: radial-gradient(
-    ellipse 90% 90% at 90% 80%,
-    rgba(44, 32, 56, 0) 0%,
-    rgba(44, 32, 56, 0.04) 50%,
-    rgba(44, 32, 56, 0.14) 80%,
-    rgba(20, 16, 26, 0.3) 100%
-  );
+  /* v0.3.5 双保险：在原 radial 紫色氛围基础上，叠加一条从底向上的背景色渐变，
+     作为人像下半身的"阴影压暗层"。mix-blend-mode: multiply 让它和人像正片叠底，
+     底部大衣颜色被进一步压暗融入背景，彻底去掉"PS 贴图切底"的僵硬感。 */
+  background:
+    linear-gradient(
+      to top,
+      rgba(14, 10, 24, 0.92) 0%,
+      rgba(14, 10, 24, 0.55) 12%,
+      rgba(14, 10, 24, 0.2) 24%,
+      rgba(14, 10, 24, 0) 38%
+    ),
+    radial-gradient(
+      ellipse 90% 90% at 90% 80%,
+      rgba(44, 32, 56, 0) 0%,
+      rgba(44, 32, 56, 0.04) 50%,
+      rgba(44, 32, 56, 0.14) 80%,
+      rgba(20, 16, 26, 0.3) 100%
+    );
 }
 
 /* 中线垂直渐变遮罩（v3）：配合 ::after 的玫瑰紫色层，此层只负责气泡区压暗

@@ -137,6 +137,9 @@ export function Chat({
             disabled={streaming}
             locked={false}
           />
+          <p className="mt-2 text-xs text-xx-text-dim leading-relaxed">
+            {currentMeta.description}
+          </p>
         </div>
       )}
 

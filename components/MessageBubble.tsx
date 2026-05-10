@@ -66,14 +66,53 @@ export function MessageBubble({
     }
   }
 
+  /**
+   * v0.7.3：点击「追问这一段」= 一键直发追问
+   *
+   * 从 AI 回复里挑选最合适的"锚点句"——优先级：
+   * 1. 最后一句疑问句（通常是收尾 forced choice，最值得追）
+   * 2. 带「？」的最短句（核心反问）
+   * 3. 降级为第一句
+   *
+   * 锚点最多 60 字，超出截断加"…"。
+   */
   function handleQuote() {
-    // 提取第一句/第一段（最多 80 字）作为引用锚点
     const raw = message.content.trim();
-    const firstChunk =
-      raw.split(/(?<=[。！？])\s*/)[0] || raw.slice(0, 80);
-    const snippet =
-      firstChunk.length > 80 ? firstChunk.slice(0, 78) + "…" : firstChunk;
-    onQuoteReply?.(snippet);
+    // 按句号/问号/感叹号切句，保留标点
+    const sentences = raw
+      .split(/(?<=[。！？?!])\s*/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let anchor = "";
+
+    // 优先：最后一句带问号的（通常是收尾 forced choice）
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      if (/[？?]/.test(sentences[i])) {
+        anchor = sentences[i];
+        break;
+      }
+    }
+
+    // 降级：带问号的最短句
+    if (!anchor) {
+      const questionSents = sentences.filter((s) => /[？?]/.test(s));
+      if (questionSents.length > 0) {
+        anchor = questionSents.reduce((a, b) => (a.length <= b.length ? a : b));
+      }
+    }
+
+    // 再降级：第一句
+    if (!anchor) {
+      anchor = sentences[0] || raw.slice(0, 60);
+    }
+
+    // 长度截断
+    if (anchor.length > 60) {
+      anchor = anchor.slice(0, 58) + "…";
+    }
+
+    onQuoteReply?.(anchor);
   }
 
   const showActions = message.done && message.content.length > 0;

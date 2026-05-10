@@ -43,23 +43,21 @@ export function Chat({
     }
   }, [messages]);
 
-  /** 点击 AI 消息的「追问这一段」：把那句话引用到输入框 */
-  function handleQuoteReply(snippet: string) {
-    const prefix = `> ${snippet}\n\n`;
-    setInput((prev) => {
-      if (prev.startsWith(">")) {
-        const afterQuote = prev.split(/\n\n/).slice(1).join("\n\n");
-        return prefix + afterQuote;
-      }
-      return prefix + prev;
-    });
-    setTimeout(() => {
-      const el = inputRef.current;
-      if (el) {
-        el.focus();
-        el.setSelectionRange(el.value.length, el.value.length);
-      }
-    }, 0);
+  /**
+   * v0.7.3：点击 AI 消息的「追问这一段」= 一键直发
+   *
+   * 旧实现（bug）：截 AI 第一句塞输入框，用户直接按发送 → AI 收到的是"用户引用自己话"，
+   *                下一轮又把第一句塞回去 → 死循环。
+   * 新实现：直接构造一条自然话术的用户消息发出去，不经输入框。
+   *         后端 route.ts 检测 __FOLLOWUP__ 标记注入 DIRECTOR_NOTE 让 AI 深挖。
+   */
+  async function handleFollowUp(anchor: string) {
+    if (streaming) return;
+    // 内部标记：给后端识别这是追问一键直发，不是普通用户消息
+    // 格式：__FOLLOWUP__|锚点|自然话术
+    const utterance = `就你刚才说的「${anchor}」——再深挖一层，别换话题、别重复你说过的话。`;
+    const payload = `__FOLLOWUP__|${anchor}|${utterance}`;
+    await sendMessageWith(payload);
   }
 
   async function handleSend() {
@@ -174,7 +172,7 @@ export function Chat({
                 key={m.id}
                 message={m}
                 isLatestAssistant={m.id === latestAssistantId}
-                onQuoteReply={handleQuoteReply}
+                onQuoteReply={handleFollowUp}
                 onSpeakingChange={setIsSpeaking}
               />
             ))
@@ -208,7 +206,7 @@ export function Chat({
               rows={2}
               placeholder={
                 turnCount > 0
-                  ? "继续聊 · 或点上一条消息的「追问这一段」"
+                  ? "继续聊 · 或点 AI 消息下的「追问这一段」一键深挖"
                   : mode === "scathing"
                   ? "把你最得意的那个 idea 丢过来。我专挑你没敢看的那一页。"
                   : mode === "rational"

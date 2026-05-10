@@ -26,19 +26,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const message = (body.message || "").trim();
-  if (!message) {
+  const rawMessage = (body.message || "").trim();
+  if (!rawMessage) {
     return new Response(
       JSON.stringify({ error: "message 不能为空" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
-  if (message.length > 4000) {
+  if (rawMessage.length > 4000) {
     return new Response(
       JSON.stringify({ error: "单次输入不要超过 4000 字" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
+
+  // v0.7.3：解析「追问这一段」一键直发标记
+  // 格式：__FOLLOWUP__|anchor|utterance
+  const followUp = parseFollowUp(rawMessage);
+  const message = followUp ? followUp.utterance : rawMessage;
 
   const modeId: ModeId = (body.mode as ModeId) in MODES
     ? (body.mode as ModeId)
@@ -67,9 +72,16 @@ export async function POST(req: NextRequest) {
     messages.push({ role: "system", content: turnHint });
   }
 
+  // v0.7.3：如果是「追问这一段」一键直发，额外注入 DIRECTOR_NOTE
+  //        让 AI 明确"针对上条回复里的锚点再深挖一层"
+  if (followUp) {
+    const followUpHint = buildFollowUpHint(followUp.anchor, modeId);
+    messages.push({ role: "system", content: followUpHint });
+  }
+
   messages.push({ role: "user", content: message });
 
-  // 先把用户消息写入历史
+  // 先把用户消息写入历史（用自然话术，不是带标记的原串）
   appendMessage(session.id, { role: "user", content: message });
 
   const encoder = new TextEncoder();
@@ -213,5 +225,64 @@ function buildTurnFocusHint(
     `- 这是后台导演笔记，只用来微调你这一轮的关注方向，不是给用户看的`,
     `- 如果用户当前这句话明显在说别的，跟着用户走；这只是建议不是死命令`,
     `- 你的回复就是醒醒此刻直接对人开口说的话——一句不多，一句不少`,
+  ].join("\n");
+}
+
+/**
+ * v0.7.3：解析「追问这一段」一键直发标记
+ *
+ * 前端格式：`__FOLLOWUP__|anchor|utterance`
+ * - anchor：AI 上条回复里被点击的锚点句（用于后端注入 DIRECTOR_NOTE 让 AI 知道深挖哪里）
+ * - utterance：给用户看的自然话术（会替代 raw message 写进 history 和发给模型）
+ *
+ * 如果不是追问标记，返回 null，走普通消息流程。
+ */
+function parseFollowUp(
+  raw: string
+): { anchor: string; utterance: string } | null {
+  const PREFIX = "__FOLLOWUP__|";
+  if (!raw.startsWith(PREFIX)) return null;
+  const rest = raw.slice(PREFIX.length);
+  const sepIdx = rest.indexOf("|");
+  if (sepIdx <= 0) return null;
+  const anchor = rest.slice(0, sepIdx).trim();
+  const utterance = rest.slice(sepIdx + 1).trim();
+  if (!anchor || !utterance) return null;
+  return { anchor, utterance };
+}
+
+/**
+ * v0.7.3：「追问这一段」DIRECTOR_NOTE
+ *
+ * 用户点击了 AI 上条回复里的锚点句要求深挖。必须防止：
+ * 1. AI 重复上条回复已经说过的话
+ * 2. AI 跑题开新话题
+ * 3. AI 把锚点当用户说的话（比如用户引用 AI 自己的金句）
+ */
+function buildFollowUpHint(anchor: string, modeId: ModeId): string {
+  const tone =
+    modeId === "casual"
+      ? "（casual 档：保持嫌弃小妹语气，顺着这个锚点再翻一层，用新招牌——别再用上条用过的那招）"
+      : modeId === "rational"
+      ? "（rational 档：锚定这一点，推演它背后的逻辑漏洞或数据假设，用新的 forced choice 编号反问）"
+      : "（scathing 档：锚定这一点，再扇一层更深的——从动机、悖论、逃避任选一个新角度，不要重复上条已经扇过的点）";
+
+  return [
+    `[DIRECTOR_NOTE · 仅你可见，永不输出]`,
+    `用户刚刚点击了你上一条回复里的「追问这一段」按钮，`,
+    `被点击的锚点是：「${anchor}」`,
+    ``,
+    `⚠️ 重要区分：这个锚点是**你自己**上一条说的话，**不是**用户新抛出来的 idea。`,
+    `用户是在要求你针对这句话**再深挖一层**，不是让你复述它。`,
+    ``,
+    tone,
+    ``,
+    `⛔ 强制规则：`,
+    `- 绝不重复上一条回复里已经说过的话（包括这个锚点本身）`,
+    `- 绝不跑题开新话题——必须紧扣这个锚点`,
+    `- 绝不把锚点句当成用户说的话去回应（比如又说"你要做下一个 DeepSeek？"开头——那是你自己上条说过的）`,
+    `- 绝不在回复中提及"DIRECTOR_NOTE"、"锚点"、"追问这一段"等元词汇`,
+    `- 换一个角度、换一个招牌动作，把这个锚点再往深处捅 1-2 层`,
+    `- 回复末尾至少留一个**新的**具体反问（带选项的 forced choice，不是开放题）`,
   ].join("\n");
 }

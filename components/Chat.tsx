@@ -267,7 +267,7 @@ function EmptyState({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center px-4 min-h-[60dvh]">
+    <div className="flex flex-col items-center justify-center h-full text-center px-4 min-h-[55dvh] pt-8 sm:pt-0">
       <div className="logo-serif text-5xl sm:text-6xl mb-3 leading-none">
         醒醒
       </div>

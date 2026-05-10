@@ -530,11 +530,11 @@ h3,
 }
 
 @media (max-width: 767px) {
-  /* 手机端：v8.3 人物作为更低调背景 */
+  /* 手机端：v8.5 (A2) 人像下移到屏幕中段偏下，头顶留白避免被按钮区压住 */
   .silhouette-img {
-    top: 14%;
+    top: 30%;
     bottom: auto;
-    height: 80%;
+    height: 62%;
     max-width: 62%;
   }
   .silhouette-img[data-active="true"] {
@@ -551,8 +551,8 @@ h3,
 /* 超小屏 <500px */
 @media (max-width: 499px) {
   .silhouette-img {
-    top: 16%;
-    height: 72%;
+    top: 32%;
+    height: 58%;
     max-width: 58%;
   }
   .silhouette-img[src*="rational"] {

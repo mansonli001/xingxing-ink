@@ -107,13 +107,36 @@ export async function POST(req: NextRequest) {
         send("meta", { session_id: session.id, mode: modeId });
 
         let assistantText = "";
+        // v0.7.6：流式后置过滤器，扫掉 LLM 仍漏掉的舞台指示/旁白（圆括号/方括号包裹的动作描写）
+        // 策略：按行缓冲——完整行出现时先过滤再发送，避免过滤把跨 chunk 的正常内容切碎
+        let lineBuffer = "";
+        const flushLine = (line: string) => {
+          const cleaned = stripStageDirections(line);
+          if (cleaned) {
+            assistantText += cleaned;
+            send("delta", { content: cleaned });
+          }
+        };
+
         for await (const chunk of streamChat({
           messages,
           temperature: mode.temperature,
           maxTokens: mode.maxTokens,
         })) {
-          assistantText += chunk;
-          send("delta", { content: chunk });
+          lineBuffer += chunk;
+          // 只要缓冲里出现换行，就可以切出完整行过滤
+          let nlIdx = lineBuffer.indexOf("\n");
+          while (nlIdx >= 0) {
+            const line = lineBuffer.slice(0, nlIdx + 1); // 含 \n
+            lineBuffer = lineBuffer.slice(nlIdx + 1);
+            flushLine(line);
+            nlIdx = lineBuffer.indexOf("\n");
+          }
+        }
+        // 流结束时把剩余 buffer 也过滤一次
+        if (lineBuffer) {
+          flushLine(lineBuffer);
+          lineBuffer = "";
         }
 
         appendMessage(session.id, {
@@ -295,4 +318,41 @@ function buildFollowUpHint(anchor: string, modeId: ModeId): string {
     `- 换一个角度、换一个招牌动作，把这个锚点再往深处捅 1-2 层`,
     `- 回复末尾至少留一个**新的**具体反问（带选项的 forced choice，不是开放题）`,
   ].join("\n");
+}
+
+/**
+ * v0.7.6：流式后置过滤器 · 扫掉 LLM 漏输出的舞台指示/旁白
+ *
+ * 即使 prompt 明令禁止，DeepSeek 在 casual 档仍倾向于用 `（笑了一声，靠在椅背上）`
+ * 这类动作描写来传达"嫌弃小妹"的体感——纯 prompt 层防不住，必须代码层兜底。
+ *
+ * 策略（保守为主，不误伤正常内容）：
+ * 1. 只扫"成段独立出现"的舞台指示（行首或段首）
+ * 2. 只对**短动作描写**（≤ 40 字）出手
+ * 3. 保留醒醒嘴里说的长引用（如 `用户说"（我觉得）这个好"` 这种用户引用）
+ * 4. 同时处理中文/英文括号 `（）`、`()`、`【】`、`[]`
+ *
+ * @param text 一行文本（含尾部 \n 也可）
+ * @returns 过滤后文本；如果整行就是舞台指示，返回空串
+ */
+function stripStageDirections(text: string): string {
+  if (!text) return text;
+
+  // 1. 行首独立存在的舞台指示（可能后跟空行或直接内容）
+  //    例：`（把咖啡杯往桌上一搁，挑眉看你）陪伴类AI？...`
+  //    例：`（笑了一声，靠在椅背上）\n\n哦？...`
+  //    匹配：以括号开始 + 内部无换行 + 长度 ≤ 40 字（避免误伤长引用）
+  text = text.replace(
+    /^[\s]*[（(【\[][^（()【\]\n]{1,40}[)）】\]][\s]*/,
+    ""
+  );
+
+  // 2. 独立成段的舞台指示（段首紧跟换行）
+  //    例：`上一段结尾。\n\n（挑眉）\n\n下一段开头`
+  text = text.replace(
+    /\n\n[（(【\[][^（()【\]\n]{1,40}[)）】\]]\n\n/g,
+    "\n\n"
+  );
+
+  return text;
 }

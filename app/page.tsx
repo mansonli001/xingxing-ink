@@ -44,14 +44,12 @@ export default function Home() {
             · 别做梦了
           </span>
         </div>
-        <a
-          href="https://xingxing.ink"
-          target="_blank"
-          rel="noreferrer"
-          className="text-[10px] sm:text-[11px] text-xx-text-dim hover:text-xx-gold tracking-[0.2em] sm:tracking-[0.35em] font-display font-semibold transition-colors shrink-0"
+        <span
+          className="text-[10px] sm:text-[11px] text-xx-text-dim tracking-[0.2em] sm:tracking-[0.35em] font-display font-semibold shrink-0 select-none"
+          aria-label="Loading in Progress"
         >
-          XINGXING.INK
-        </a>
+          LOADING IN PROGRESS
+        </span>
       </header>
       <div className="flex-1 overflow-hidden">
         <ChatShell />

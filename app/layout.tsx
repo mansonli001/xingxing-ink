@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "醒醒 · 姐替你把想法熬一遍",
     description: "御姐风格 AI，把你模糊的想法熬成清楚的判断。三档模式可选：随便聊 / 讲道理 / 扇巴掌。",
-    url: "https://xingxing.ink",
+    url: "https://xingxing-ink.vercel.app",
     siteName: "醒醒",
     locale: "zh_CN",
     type: "website",

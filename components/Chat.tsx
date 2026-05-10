@@ -275,7 +275,7 @@ function EmptyState({
         别做梦了
       </div>
       <div className="text-xx-gold text-[11px] tracking-[0.4em] mb-8 font-display font-semibold">
-        XINGXING.INK
+        LOADING IN PROGRESS
       </div>
       <div className="w-full max-w-lg space-y-2">
         <p className="text-xs text-xx-text-dim mb-2 font-serif italic tracking-wider">

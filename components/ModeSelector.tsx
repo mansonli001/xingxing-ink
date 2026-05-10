@@ -38,7 +38,7 @@ export function ModeSelector({
                 : undefined
             }
             className={[
-              "group relative flex items-start gap-2 rounded-lg border px-3 py-3 sm:px-4 sm:py-3.5 text-left transition-all overflow-hidden",
+              "group relative flex items-center gap-2 rounded-lg border px-3 py-3.5 sm:px-4 sm:py-3.5 transition-all overflow-hidden",
               active
                 ? `${meta.activeBorder} ${meta.activeBg} ${meta.glowClass}`
                 : "border-xx-border bg-xx-bg-2 hover:border-xx-text-dim",

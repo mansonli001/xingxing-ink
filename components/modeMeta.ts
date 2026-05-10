@@ -35,7 +35,7 @@ export const MODE_META: Record<ModeId, ModeMeta> = {
   rational: {
     id: "rational",
     label: "讲道理",
-    subtitle: "我不吵架，我拆结构",
+    subtitle: "我不吵架我拆结构",
     description:
       "理性分析，逻辑犀利。适合已经有完整想法、需要被严肃审视。",
     dotColor: "bg-xx-gold",

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Chat } from "./Chat";
 import type { ChatMessageItem } from "./MessageBubble";
 import type { ModeId } from "./modeMeta";
+import { findPreset } from "../lib/presetReplies";
 
 function uid() {
   return `msg_${Date.now().toString(36)}_${Math.random()
@@ -119,6 +120,30 @@ export function ChatShell() {
   async function sendMessageWith(rawText: string) {
     const text = rawText.trim();
     if (!text || streaming) return;
+
+    // v0.4.2 预制快速路径：用户首次点击 EmptyState 9 个 tip 之一时，
+    // 直接塞预制回复 + 预制 mp3，0 延迟、0 API 开销。
+    // 仅在"完全空对话"状态下生效——后续追问全走真实 deepseek。
+    const preset = messages.length === 0 ? findPreset(mode, text) : null;
+    if (preset) {
+      const userMsg: ChatMessageItem = {
+        id: uid(),
+        role: "user",
+        content: text,
+        done: true,
+      };
+      const assistantMsg: ChatMessageItem = {
+        id: uid(),
+        role: "assistant",
+        content: preset.reply,
+        done: true,
+        mode,
+        presetAudio: preset.audio,
+      };
+      setMessages([userMsg, assistantMsg]);
+      // 不调 deepseek、不创建 session_id（让用户第二轮起再走真实 API）
+      return;
+    }
 
     const userMsg: ChatMessageItem = {
       id: uid(),

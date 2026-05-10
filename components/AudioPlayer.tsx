@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 export type AudioMode = "casual" | "rational" | "scathing";
 
 interface AudioPlayerProps {
-  /** 完整文本，组件内部调 /api/tts 合成 */
+  /** 完整文本，组件内部调 /api/tts 合成（除非传了 presetAudioUrl） */
   text: string;
   /** 当前对话模式，决定音色（随便聊/讲道理/扇巴掌） */
   mode?: AudioMode;
@@ -14,18 +14,24 @@ interface AudioPlayerProps {
   autoPlay?: boolean;
   /** 对外暴露播放状态：true=正在播，false=未播/暂停/结束。供上层触发人像呼吸动效 */
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * v0.4.2：预制音频直链（如 /preset-voices/casual-0.mp3）。
+   * 传了就直接播放该 URL，跳过 /api/tts 合成（0 延迟、0 API 开销）。
+   */
+  presetAudioUrl?: string;
 }
 
 type Status = "idle" | "loading" | "ready" | "playing" | "error";
 
-/** 按钮文案按 mode 切换（贴合三档人设花名） */
-const MODE_LABELS: Record<
-  AudioMode,
-  { idle: string; playing: string }
-> = {
-  casual: { idle: "▶ 听北京大妞", playing: "♪ 北京大妞正在说" },
-  rational: { idle: "▶ 听清冷阿梦", playing: "♪ 清冷阿梦正在说" },
-  scathing: { idle: "▶ 听高冷御姐", playing: "♪ 高冷御姐正在说" },
+/**
+ * v0.4.2：按钮文案中性化——不暴露音色花名（北京大妞/清冷阿梦/...），
+ * 三档统一一套词，姐姐人设由内容自身体现。
+ */
+const LABELS = {
+  idle: "▶ 让她说说",
+  playing: "♪ 她在说话",
+  loading: "正在熬一遍……",
+  retry: "♻ 重试",
 };
 
 /* ------------------------------------------------------------------
@@ -69,6 +75,7 @@ export function AudioPlayer({
   mode = "casual",
   autoPlay = false,
   onPlayingChange,
+  presetAudioUrl,
 }: AudioPlayerProps) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -84,6 +91,18 @@ export function AudioPlayer({
   async function generate() {
     if (status === "loading") return;
     setErrorMsg("");
+
+    // v0.4.2：预制音频路径优先 —— 跳过缓存查找和 /api/tts 调用
+    if (presetAudioUrl && audioRef.current) {
+      audioRef.current.src = presetAudioUrl;
+      try {
+        await audioRef.current.play();
+        setStatus("playing");
+      } catch {
+        setStatus("ready");
+      }
+      return;
+    }
 
     const cacheKey = getCacheKey(mode, text);
     const cachedUrl = blobCache.get(cacheKey);
@@ -136,15 +155,14 @@ export function AudioPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPlay, text]);
 
-  const labels = MODE_LABELS[mode];
   const mainLabel =
     status === "loading"
-      ? "正在熬一遍……"
+      ? LABELS.loading
       : status === "playing"
-      ? labels.playing
+      ? LABELS.playing
       : status === "error"
-      ? "♻ 重试"
-      : labels.idle;
+      ? LABELS.retry
+      : LABELS.idle;
 
   return (
     <div className="flex items-center gap-2 mt-2 text-xs text-xx-text-dim">

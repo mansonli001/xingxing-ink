@@ -18,6 +18,12 @@ export interface ChatMessageItem {
   done: boolean;
   /** 这条消息所属的模式（影响着色） */
   mode?: ModeId;
+  /**
+   * v0.4.2：预制音频直链（如 /preset-voices/casual-0.mp3）。
+   * 当用户点击 EmptyState 的 9 个引导 tip 之一时，首轮回复直接用预制 mp3，
+   * 跳过 /api/tts 合成，0 延迟、0 调用开销。
+   */
+  presetAudio?: string;
 }
 
 interface MessageBubbleProps {
@@ -114,6 +120,7 @@ export function MessageBubble({
               mode={message.mode || "casual"}
               autoPlay={false}
               onPlayingChange={onSpeakingChange}
+              presetAudioUrl={message.presetAudio}
             />
           ) : null}
         </div>

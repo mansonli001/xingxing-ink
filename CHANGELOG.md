@@ -8,6 +8,112 @@
 
 ---
 
+## [v0.4.2] - 2026-05-10 — 「9 条预制开场 · 0 延迟炸裂首屏」
+
+> 一句话总结：用户点 EmptyState 9 个引导 tip 时，**首轮直接播预制 mp3 + 显示预制文字**，0 延迟；同时输出文案中性化（不再暴露音色花名）+ 三档 prompt 注入【首轮黄金公式】。
+
+### 背景与设计
+
+v0.4.1 上线后发现：用户点击 tip 之后要等 deepseek 流式生成 + 火山 TTS 合成，**首句出现要 5-10 秒**，体验温吞——首屏的"姐姐人格 wow"完全炸不出来。
+
+参考 https://toxic-pm.bijin.ink/ 的真实回复结构，逆向分析它的 4 段式公式 + 9 条真实回复样本（3 档 × 3 场景），扒出"具体对标 / 数字 / 行话 / 案例"作为干货锚点库。基于此：
+
+1. **三档 prompt 增量补丁**——在原有人设基础上追加【首轮黄金公式】（4 段式 + 锚点表）+ 【情感兜底分支】（非产品场景关键词识别）
+2. **9 条预制回复定稿**——使用 deepseek **3 版采样 + 4 维评分选 1**（B 方案），rational 3 条还和 toxic-pm 线上做了 1v1 对比融合
+3. **预制 mp3 提前合成**进 `public/preset-voices/`，运行时 0 调用、0 延迟
+
+### Added —— 三档 prompt 增量补丁
+
+文件：`lib/prompts/{casual,rational,scathing}.md` 末尾追加。
+
+每档新增 2 个章节：
+- **首轮黄金公式**：4 段式（嫌弃钩子/冷启 → 扎人事实 + 锚点 → 戳小尴尬 / 单追 → 甩追问 / 沉默收）+ 字数约束（casual/rational 180-260，scathing 200-280）+ 锚点对照表
+- **情感兜底分支**：识别非产品关键词（睡不着/焦虑/烦/心累/想哭...）→ 切换"嫌弃式关心"模式，保留人设但收毒
+
+### Added —— 9 条预制回复
+
+文件：`lib/presetReplies.ts`
+
+| mode | tip | 回复关键词 |
+|---|---|---|
+| casual #0 | 今天突然想做个陪伴类 AI | Character.AI 月活两千万 + 朋友圈点赞低于 30 |
+| casual #1 | 我又想做自媒体了 | 泛情感/生活记录/个人成长 = 炮灰 + 瑜伽卡 |
+| casual #2 | 小红书记录日常 | 早高峰地铁挤成相片 + 比便利店饭团还多 |
+| rational #0 | PRD 月薪 1-2 万 | 北上广深刚付房租吃猪脚饭 vs 老家县城高富帅 |
+| rational #1 | 30 个朋友愿意付 | **礼貌性捧杀** + 塑料情谊当场转账 + 真掏过钱的名字 |
+| rational #2 | MVP 50 万 3 个月 | "还没想清楚就先算盘子的老板思维" + 倒推需求 + 外包三流 App + 烧钱听响 |
+| scathing #0 | 下一个 DeepSeek | H800 床底下 + 在公司升不上去开假条 + 比梁文锋多懂什么 |
+| scathing #1 | all in AI 创业 | 卖煎饼大妈都用 AI + 想法最不值钱 + all in 是开假条 |
+| scathing #2 | 干掉抖音 | 算法算透祖宗十八代 + 全球日活十亿怪物 + 凌晨三点后悔逃避 |
+
+定稿过程：
+- casual / scathing 6 条：deepseek **3 版采样 + 4 维评分**（字数 30 / 4 段结构 25 / 锚点命中 30 / 开头狠度 15），自动选 Top 1，6 条全 100 分满分
+- rational 3 条：先生成 → 再用 toxic-pm rationalist 档跑同 tip → 1v1 对比 → **取各家所长融合定稿**
+  - #0 取 toxic-pm 地域反差画面 + 保留玲玲沉默式"继续。"
+  - #1 保留我们"礼貌性捧杀+我们聊的是社交"双金句 + 偷 toxic-pm "塑料情谊+当场转账"
+  - #2 取 toxic-pm 真人感开场 + 保留我们倒推需求/外包三流App/烧钱听响三连金句
+
+### Added —— 预制音频合成脚本
+
+新文件：`scripts/synth-presets.js` —— 从 `lib/presetReplies.ts` 读最终文本，调火山 TTS 合成 9 段 mp3 到 `public/preset-voices/`。
+- `node scripts/synth-presets.js` 全量
+- `node scripts/synth-presets.js casual` 单档
+- `node scripts/synth-presets.js casual 0` 单条
+
+总产物：9 个 mp3 文件，约 2.4 MB（首屏负担可接受）。
+
+### Added —— 预制快速路径
+
+`components/ChatShell.tsx` 的 `sendMessageWith` 入口新增预制检查：
+
+```ts
+const preset = messages.length === 0 ? findPreset(mode, text) : null;
+if (preset) {
+  // 直接塞 user + assistant 消息，assistantMsg.presetAudio = preset.audio
+  setMessages([userMsg, assistantMsg]);
+  return; // 不调 deepseek，不创建 session
+}
+```
+
+特性：
+- 仅在 **完全空对话**（messages.length === 0）状态下命中——后续追问 100% 走真实 deepseek
+- 命中后 0 延迟，文字立刻显示
+- 用户点喇叭按钮 → 直接播 `/preset-voices/xxx.mp3`，跳过 `/api/tts` 调用
+
+### Added —— AudioPlayer presetAudioUrl 支持
+
+`components/AudioPlayer.tsx` 新增 `presetAudioUrl?: string` prop。
+- 传了 → 直接 `audio.src = presetAudioUrl` + play，跳过缓存查找和 fetch
+- `MessageBubble.tsx` 把 `message.presetAudio` 透传过来
+- `ChatMessageItem` 新增 `presetAudio?: string` 字段
+
+### Changed —— 按钮文案中性化
+
+`components/AudioPlayer.tsx` 三档统一文案，**不再暴露音色花名**：
+
+```diff
+- casual:   "▶ 听北京大妞" / "♪ 北京大妞正在说"
+- rational: "▶ 听清冷阿梦" / "♪ 清冷阿梦正在说"
+- scathing: "▶ 听高冷御姐" / "♪ 高冷御姐正在说"
++ 三档统一: "▶ 让她说说" / "♪ 她在说话"
+```
+
+理由：暴露音色名（北京大妞/清冷阿梦/高冷御姐）破坏了"姐姐"统一人设，且让用户感知到"AI 不同档位用了不同 TTS"，没必要。
+
+### Local Verified
+
+- 9 段 mp3 全部合成成功（macOS afplay 三档代表作外放正常）
+- npm run build 通过
+- ChatShell 预制路径在 dev 环境下手动测过（`messages.length === 0` 命中成功）
+
+### Pending After Push
+
+- iPhone 真机测试 9 个预制 tip 全部 0 延迟
+- 测点击预制后第二轮追问是否正常走 deepseek
+- 测自由输入（不点 tip）走真 AI 不被预制误命中
+
+---
+
 ## [v0.4.1] - 2026-05-10 — 「换御姐音色 + 整体提速 + 点击 0 延迟」
 
 > 一句话总结：v0.4.0 的顾姐台湾腔太重，换成傲娇女友 ICL 音色；三档语速统一升到 1.3x；前端加 Blob 缓存让"同一段话重听"瞬间响应。

@@ -81,6 +81,52 @@ const VOICE_CONFIG = {
 
 const VOLC_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
 
+/**
+ * Markdown → 语音友好纯文本 ⚠️
+ * ============================================================
+ * 与 lib/textForSpeech.ts 的 stripForSpeech / applySpeechReadings 严格保持一致。
+ * 修这里时同步改 lib/textForSpeech.ts，反之亦然。
+ * ============================================================
+ */
+function stripForSpeech(text) {
+  return String(text)
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^[\s]*[-*+]\s+/gm, "")
+    .replace(/^[\s]*\d+\.\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** 读音映射（保持与 lib/textForSpeech.ts 同步） */
+const SPEECH_READINGS = [
+  { from: /\bH800\b/g, to: "H 八百" },
+  { from: /Character\.AI/g, to: "Character A I" },
+];
+function applySpeechReadings(text) {
+  let r = text;
+  for (const rule of SPEECH_READINGS) r = r.replace(rule.from, rule.to);
+  return r;
+}
+
+/** 检测剥离后是否还有 markdown 噪声（防止脏文本进 TTS 烧钱） */
+function detectMarkdownNoise(text) {
+  const issues = [];
+  if (text.includes("**")) issues.push("** 粗体未剥离");
+  if (text.includes("__")) issues.push("__ 双下划线粗体");
+  if (/(?<!\d)\*(?!\d)/.test(text)) issues.push("* 单星号残留");
+  if (/(?<!^)#{1,6}\s/.test(text)) issues.push("#... 标题残留");
+  if (/```/.test(text)) issues.push("``` 代码块残留");
+  if (/\[[^\]]+\]\([^)]+\)/.test(text)) issues.push("[](...) 链接残留");
+  return issues;
+}
+
 // ---- 3. 火山 TTS 合成（NDJSON 流解析） ----
 async function volcanoSynth(text, mode) {
   const apiKey = process.env.VOLC_API_KEY;
@@ -231,15 +277,42 @@ async function main() {
     const cfg = VOICE_CONFIG[p.mode];
     const fileName = `${p.mode}-${p.index}.mp3`;
     const absPath = path.join(PUBLIC_VOICES_DIR, fileName);
-    const charCount = [...p.reply].length;
+
+    // 关键防御：送 TTS 前先剥离 markdown，再校验，绝不让 ** 等符号被念成"星号"
+    // 然后应用读音映射（如 H800 → H 八百），让 TTS 念得更自然
+    const stripped = stripForSpeech(p.reply);
+    const noise = detectMarkdownNoise(stripped);
+    if (noise.length > 0) {
+      console.error(
+        `   ❌ 文本剥离后仍有 markdown 噪声：${noise.join(" / ")}\n      跳过合成。请检查 stripForSpeech 实现或 reply 文本本身是否有特殊情况。`
+      );
+      results.push({
+        ok: false,
+        file: fileName,
+        error: `markdown 噪声：${noise.join(" / ")}`,
+      });
+      continue;
+    }
+    const ttsText = applySpeechReadings(stripped);
+
+    const charCount = [...ttsText].length;
     console.log(
-      `🎤 ${p.mode}-${p.index} (${cfg.displayName}) · ${charCount}字`
+      `🎤 ${p.mode}-${p.index} (${cfg.displayName}) · 原文${[...p.reply].length}字 → 净文${charCount}字`
     );
     console.log(`   trigger: ${p.trigger}`);
+    if (p.reply !== ttsText) {
+      const diff = [...p.reply].length - charCount;
+      const sign = diff > 0 ? "-" : "+";
+      console.log(`   🧹 剥离 + 读音映射净化 ${sign}${Math.abs(diff)} 字`);
+      // 显示读音映射命中
+      if (stripped !== ttsText) {
+        console.log(`   🎙️  读音映射已应用（H800 等）`);
+      }
+    }
 
     try {
       const t0 = Date.now();
-      const mp3 = await volcanoSynth(p.reply, p.mode);
+      const mp3 = await volcanoSynth(ttsText, p.mode);
       fs.writeFileSync(absPath, mp3);
       const sizeKB = (mp3.length / 1024).toFixed(1);
       const dt = ((Date.now() - t0) / 1000).toFixed(1);

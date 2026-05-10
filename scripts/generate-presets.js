@@ -78,6 +78,43 @@ const TIPS = {
   ],
 };
 
+/**
+ * Markdown → 语音友好纯文本 ⚠️
+ * 与 lib/textForSpeech.ts 的 stripForSpeech / applySpeechReadings 严格保持一致
+ */
+function stripForSpeech(text) {
+  return String(text)
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^[\s]*[-*+]\s+/gm, "")
+    .replace(/^[\s]*\d+\.\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+const SPEECH_READINGS = [
+  { from: /\bH800\b/g, to: "H 八百" },
+  { from: /Character\.AI/g, to: "Character A I" },
+];
+function applySpeechReadings(text) {
+  let r = text;
+  for (const rule of SPEECH_READINGS) r = r.replace(rule.from, rule.to);
+  return r;
+}
+function detectMarkdownNoise(text) {
+  const issues = [];
+  if (text.includes("**")) issues.push("**");
+  if (text.includes("__")) issues.push("__");
+  if (/(?<!\d)\*(?!\d)/.test(text)) issues.push("*");
+  if (/```/.test(text)) issues.push("```");
+  return issues;
+}
+
 /** 与 lib/volcano-tts.ts 保持一致的三档音色配置 */
 const VOICE_CONFIG = {
   casual: {
@@ -479,8 +516,18 @@ async function main() {
         console.log(`      💨 --dry-run 跳过 TTS`);
       } else {
         try {
-          console.log(`      🎤 调火山 TTS...`);
-          const mp3 = await volcanoSynth(reply, mode);
+          // v0.4.2.1 防御：剥离 markdown + 应用读音映射，防止 ** 被念成"星号"或 H800 念错
+          const stripped = stripForSpeech(reply);
+          const noise = detectMarkdownNoise(stripped);
+          if (noise.length > 0) {
+            console.error(
+              `      ❌ markdown 噪声未剥离：${noise.join(" / ")}，跳过 TTS`
+            );
+            continue;
+          }
+          const ttsText = applySpeechReadings(stripped);
+          console.log(`      🎤 调火山 TTS（净文${[...ttsText].length}字）...`);
+          const mp3 = await volcanoSynth(ttsText, mode);
           fs.writeFileSync(audioAbs, mp3);
           console.log(`      💾 保存 ${audioRel}（${mp3.length} bytes）`);
         } catch (e) {

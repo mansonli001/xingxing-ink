@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { synthesizeSpeech, type ModeId } from "@/lib/volcano-tts";
+import { stripForSpeech, applySpeechReadings } from "@/lib/textForSpeech";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,26 +12,6 @@ interface TTSRequestBody {
 }
 
 const VALID_MODES: ModeId[] = ["casual", "rational", "scathing"];
-
-/**
- * 文本预处理：去除 Markdown 标记，让 TTS 朗读更自然
- * （沿用 v0.3 原有的清洗规则）
- */
-function stripMarkdownForTTS(text: string): string {
-  return text
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/^[\s]*[-*+]\s+/gm, "")
-    .replace(/^[\s]*\d+\.\s+/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 export async function POST(req: NextRequest) {
   // 服务端二道关：开关未启用 / 未配 Key → 直接劝退
@@ -72,7 +53,7 @@ export async function POST(req: NextRequest) {
   const mode: ModeId =
     body.mode && VALID_MODES.includes(body.mode) ? body.mode : "casual";
 
-  const text = stripMarkdownForTTS(rawText);
+  const text = applySpeechReadings(stripForSpeech(rawText));
   if (!text) {
     return new Response(
       JSON.stringify({ error: "文本去格式后为空" }),

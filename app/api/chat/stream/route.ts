@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { streamChat, type ChatMessage } from "@/lib/deepseek";
-import { getMode, loadSystemPrompt, MODES, type ModeId } from "@/lib/prompts";
+import { getMode, buildSystemPrompt, MODES, type ModeId } from "@/lib/prompts";
 import {
   appendMessage,
   getOrCreateSession,
@@ -51,7 +51,17 @@ export async function POST(req: NextRequest) {
   const mode = getMode(modeId);
   const { session, modeChanged } = getOrCreateSession(body.session_id, modeId);
 
-  const systemPrompt = loadSystemPrompt(modeId);
+  // v0.7.4：按轮次 + 用户输入动态组装 system prompt
+  //
+  //   - userTurnCount 是「用户本轮是第几次发言」（1 起）
+  //   - session.history 里是前 N 轮的 user+assistant 对话；本轮 user 消息还没写入
+  //   - 所以 userTurnCount = floor(history.length / 2) + 1
+  const userTurnCount = Math.floor(session.history.length / 2) + 1;
+  const historySummary = session.history
+    .slice(-6) // 最近 3 轮（user+assistant 各 3 条）
+    .map((m) => m.content)
+    .join(" ");
+  const systemPrompt = buildSystemPrompt(modeId, userTurnCount, message, historySummary);
 
   // 构造消息：system prompt → 历史 → [可选的人格切换提示] → 当前用户消息
   const messages: ChatMessage[] = [

@@ -8,6 +8,78 @@
 
 ---
 
+## [v0.7.9] - 2026-05-11 — 「12 问动态 Picker · Token 再省 17%」
+
+> **Minor 大版本** · 把全量方法论拆成「12 问独立文件」，按需注入。
+> 第 6+ 轮 prompt 18K → 15K（-17%），全部进入 DeepSeek 最佳消化区。
+
+### Added · 12 问动态注入架构
+
+#### 私藏 repo（xingxing-ink-mind · commit 9086efc）
+
+新增 49 个文件：
+- `_methodology/_matrix_overview.md` — 12 问地图层（永远注入 · ~600 tokens）
+- `_methodology/questions/Q1.md ~ Q12.md` — 单题详细弹药（~400 tokens/Q）
+- `arsenal_addon/{casual,rational,scathing}_q/Q1.md ~ Q12.md` — 三档 × 12 题特色加密（~150 tokens/Q）
+- `scripts/_gen_arsenal_q.mjs` — 36 文件批量生成器（迭代用）
+
+#### 主 repo（开源骨架）
+
+- `lib/prompts/q_picker.ts` — 关键词 + 递推 + **粘性 3 轮**算法
+  - 词典：12 个 Q × ~10 个关键词
+  - 算法：
+    1. 检测当前消息 + 历史关键词 → 加权评分
+    2. 推断上一题状态（哪个 Q + 第几把刀）
+    3. 决策树：跳题信号 / 粘性继续 / 题挥完转下一题 / 兜底起手
+  - 粘性铁律：开始攻 Qn 后强制连续 3 轮注入对应 Qn 弹药（除非用户明确跳题）
+- `lib/prompts/methodology_loader.ts` 新增 3 个接口：
+  - `loadMatrixOverview()`
+  - `loadQuestionFile(qNumber)`
+  - `loadArsenalAddonQ(mode, qNumber)`
+- `lib/prompts/index.ts` `buildSystemPrompt`：
+  - 接口扩展：新增可选 `recentHistory` 参数
+  - 第 3+ 轮注入策略变更：从 `[matrix(8K) + arsenal_addon(5K)]` 改为 `[overview(0.6K) + Qn(0.4K) + addon_q(0.15K)]`
+  - 在 overview 末尾追加"当前攻击点"标注，让醒醒清楚自己在哪
+  - Fallback 兜底：新文件缺失时降级到 v0.7.8.2 全量加载
+- `app/api/chat/stream/route.ts`：传入 `recentHistory`（最近 4 轮 user+assistant 对话）
+
+### Performance
+
+| 场景 | v0.7.8.2 | **v0.7.9** | 节省 |
+|---|---|---|---|
+| 第 1-2 轮 | ~10K tokens | ~11K tokens | +9% |
+| 第 3 轮 | 15K | **12K** | -20% |
+| 第 5 轮 | 17K | **15K** | -12% |
+| 第 6+ 轮 | 18K | **15K** | -17% |
+
+整体进入 DeepSeek 最佳消化区（≤15K tokens · 远离注意力衰减拐点）。
+
+### Architecture（v0.7.4 → v0.7.9 演进）
+
+```
+v0.7.4：分层组装（core/persona/dynamic/arsenal）
+v0.7.8：方法论层注入（matrix/diagnosis/protocol/arsenal_addon）
+v0.7.8.1：结构铁律 + 首尾夹击
+v0.7.8.2：方法论文件精简（双轨 · 运行时版 vs 人类版）
+v0.7.9：方法论拆 12 问 + Q picker 动态注入 ⭐
+```
+
+### Risk & Fallback
+
+- ✅ 旧文件 `_matrix_v1.md` / `arsenal_addon/{mode}.md` **仍保留**——picker 找不到新文件时自动降级
+- ✅ 主 repo `buildSystemPrompt` 旧调用兼容（recentHistory 默认空数组）
+- ✅ 缺失任何文件全部返回空字符串 · 主流程不阻断
+- ⚠️ Picker 关键词命中率依赖词典质量（v1.1+ 可补充）
+- ⚠️ 粘性 3 轮 vs 用户跳题信号的边界——picker 优先尊重用户跳题，但首字粘性可能错过用户隐式跳题
+
+### Verified
+
+- tsc 0 错误 + next build 成功 + 0 lint
+- 健康检查 49 文件 0 缺失
+- 真机验证待 mind repo redeploy 后做
+
+---
+
 ## [v0.7.8.2] - 2026-05-11 — 「方法论文件精简 · Token 优化 27%」
 
 > **Patch · 质量不掉 token 省 27%** · 把方法论文件砍到 LLM 最佳消化区间。

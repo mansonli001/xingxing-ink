@@ -61,7 +61,15 @@ export async function POST(req: NextRequest) {
     .slice(-6) // 最近 3 轮（user+assistant 各 3 条）
     .map((m) => m.content)
     .join(" ");
-  const systemPrompt = buildSystemPrompt(modeId, userTurnCount, message, historySummary);
+
+  // v0.7.9：把最近 4 轮（user+assistant 各 4 条）传给 picker
+  // 用于推断当前在攻哪个 Q + 第几把刀（粘性 3 轮决策）
+  const recentHistory = session.history.slice(-8).map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  const systemPrompt = buildSystemPrompt(modeId, userTurnCount, message, historySummary, recentHistory);
 
   // 构造消息：system prompt → 历史 → [可选的人格切换提示] → 当前用户消息
   const messages: ChatMessage[] = [

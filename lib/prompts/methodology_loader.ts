@@ -51,9 +51,49 @@ function loadPrivate(relPath: string): string {
  *
  * 文件：`_methodology/_matrix_v1.md`
  * 缺失返回空字符串。
+ *
+ * @deprecated v0.7.9+ 推荐使用 `loadMatrixOverview()` + `loadQuestionFile()` 的动态组合，
+ *   全量 matrix 仅作为 fallback 兜底。
  */
 export function loadMethodology(): string {
   return loadPrivate("_methodology/_matrix_v1.md");
+}
+
+/**
+ * v0.7.9 · 加载 12 问总览地图（永远注入 · ~600 tokens）
+ *
+ * 文件：`_methodology/_matrix_overview.md`
+ * 缺失返回空字符串（fallback 走 loadMethodology() 全量版）。
+ */
+export function loadMatrixOverview(): string {
+  return loadPrivate("_methodology/_matrix_overview.md");
+}
+
+/**
+ * v0.7.9 · 加载单个问题的详细弹药（按 picker 结果动态注入）
+ *
+ * 文件：`_methodology/questions/Qn.md`（n = 1..12）
+ * 每个文件 ~400 tokens。缺失返回空字符串。
+ */
+export function loadQuestionFile(qNumber: string): string {
+  // 安全检查：qNumber 必须是 Q1-Q12 之一
+  if (!/^Q([1-9]|1[0-2])$/.test(qNumber)) {
+    return "";
+  }
+  return loadPrivate(`_methodology/questions/${qNumber}.md`);
+}
+
+/**
+ * v0.7.9 · 加载档位 × 单题的特色加密弹药（在 questions/Qn.md 通用弹药基础上加层）
+ *
+ * 文件：`arsenal_addon/{mode}_q/Qn.md`
+ * 每个文件 ~150 tokens。缺失返回空字符串。
+ */
+export function loadArsenalAddonQ(mode: ModeId, qNumber: string): string {
+  if (!/^Q([1-9]|1[0-2])$/.test(qNumber)) {
+    return "";
+  }
+  return loadPrivate(`arsenal_addon/${mode}_q/${qNumber}.md`);
 }
 
 /**

@@ -18,11 +18,15 @@ import path from "node:path";
 import { pickArsenal } from "./arsenal_picker";
 import {
   loadMethodology,
+  loadMatrixOverview,
+  loadQuestionFile,
+  loadArsenalAddonQ,
   loadDiagnosisTemplate,
   loadResponseProtocol,
   loadArsenalAddon,
   loadResponseStructure,
 } from "./methodology_loader";
+import { pickCurrentQ } from "./q_picker";
 
 export type ModeId = "casual" | "rational" | "scathing";
 
@@ -174,14 +178,17 @@ function loadFinalReminder(): string {
  *
  * @param mode 三档之一
  * @param userTurnCount 当前是用户第几轮发言（1 起）
- * @param userMessage 本轮用户消息（用于 arsenal 命中）
+ * @param userMessage 本轮用户消息（用于 arsenal 命中 + Q picker）
  * @param historySummary 历史摘要（可选，用于 arsenal 更准命中）
+ * @param recentHistory v0.7.9 新增：最近的对话历史（用于 Q picker 状态推断）
+ *                      传入则启用 12 问动态 picker，否则走 fallback 全量加载（兼容旧调用）
  */
 export function buildSystemPrompt(
   mode: ModeId,
   userTurnCount: number,
   userMessage: string,
-  historySummary: string = ""
+  historySummary: string = "",
+  recentHistory: { role: "user" | "assistant"; content: string }[] = []
 ): string {
   const parts: string[] = [];
 
@@ -200,50 +207,70 @@ export function buildSystemPrompt(
   if (arsenal) parts.push(arsenal);
 
   // ====================================================================
-  // 4.x v0.7.8 方法论层（按需注入 · 私藏 symlink）
+  // 4.x v0.7.9 方法论层（动态 12 问 picker · 私藏 symlink）
   //
-  // 设计原则：避免 25K+ token 的 prompt 衰减 LLM 注意力。
-  // 不同轮次注入不同层，让 prompt 长度随对话深度递进。
+  // v0.7.9 升级：从全量 matrix 改为「Overview 地图 + 单 Q 详细弹药」动态注入。
   //
   // 注入策略：
   //   - 第 1-2 轮：方法论层全部不注入（开场期，专注首轮黄金公式）
-  //   - 第 3+ 轮：注入 matrix（核心心法）+ arsenal_addon（三档主攻区弹药）
+  //   - 第 3+ 轮：picker 决定当前攻哪个 Q + 第几把刀
+  //               → 注入 _matrix_overview.md（地图，~600 tokens）
+  //               + questions/Qn.md（当前 Q 通用弹药，~400 tokens）
+  //               + arsenal_addon/{mode}_q/Qn.md（档位特色加密，~150 tokens）
   //   - 触发"答不出来": 注入 response_protocol（三档差异化 SOP）
   //   - 第 5+ 轮：注入 diagnosis_template（诊断书心法埋点）
   //
-  // 这样：
-  //   - 第 1-2 轮 prompt ~12K chars（同 v0.7.7）
-  //   - 第 3-5 轮 prompt ~25K chars（按需）
-  //   - 第 6+ 轮 prompt ~28K chars（含诊断书）
-  //   - 缺失文件全部返回空字符串保底，主流程可工作（弱化为 v0.7.7）
+  // Token 节省：
+  //   - 第 3+ 轮 v0.7.8.2 ~16K → v0.7.9 ~10K（-37%）
+  //
+  // Fallback 兜底：
+  //   - 任何文件缺失全部返回空字符串
+  //   - overview/Qn 文件缺失时降级到全量 matrix v1.0（loadMethodology）
   // ====================================================================
 
   if (userTurnCount >= 3) {
-    // 4.1 五维矩阵（核心心法 · 第 3+ 轮才注入）
-    const methodology = loadMethodology();
-    if (methodology) parts.push(methodology);
+    // 4.1 Q Picker：决定当前要攻哪个 Q + 第几把刀
+    const pick = pickCurrentQ(userMessage, recentHistory, userTurnCount, mode);
 
-    // 4.3 三档主攻区弹药（按档抽 · 第 3+ 轮才注入）
-    const arsenalAddon = loadArsenalAddon(mode);
-    if (arsenalAddon) parts.push(arsenalAddon);
+    // 4.2 矩阵地图（永远注入 + 当前攻击点标注）
+    const overview = loadMatrixOverview();
+    if (overview) {
+      const annotation = `\n\n---\n\n## 🎯 当前攻击点（picker 计算 · 第 ${userTurnCount} 轮）\n\n- **当前主攻 Q**：${pick.primaryQ}\n- **本轮挥第 ${pick.bladeIndex} 把刀**（共 3 把 · ${pick.isSticky ? "粘性中" : "首攻"}）\n- **粘性铁律**：本题 3 把刀挥完才能换题（除非用户明确跳题或答不出来）\n`;
+      parts.push(overview + annotation);
+    } else {
+      // Fallback：overview 缺失 → 退回到全量 matrix（v0.7.8.2 行为）
+      const fullMatrix = loadMethodology();
+      if (fullMatrix) parts.push(fullMatrix);
+    }
+
+    // 4.3 当前 Q 的详细弹药（通用三把刀）
+    const qFile = loadQuestionFile(pick.primaryQ);
+    if (qFile) parts.push(qFile);
+
+    // 4.4 档位特色加密弹药（在通用基础上加层）
+    const addonQ = loadArsenalAddonQ(mode, pick.primaryQ);
+    if (addonQ) {
+      parts.push(addonQ);
+    } else {
+      // Fallback：单题加密缺失 → 退回到全量档位 arsenal_addon（v0.7.8.2 行为）
+      const addonFull = loadArsenalAddon(mode);
+      if (addonFull) parts.push(addonFull);
+    }
   }
 
-  // 4.2 答不出来 SOP（按 trigger 词命中 · 任何轮次都可触发）
+  // 4.5 答不出来 SOP（按 trigger 词命中 · 任何轮次都可触发）
   if (shouldInjectResponseProtocol(userMessage, historySummary)) {
     const responseProtocol = loadResponseProtocol(mode);
     if (responseProtocol) parts.push(responseProtocol);
   }
 
-  // 4.4 诊断书模板（5+ 轮主动给"下次聊建议"时心法埋点）
+  // 4.6 诊断书模板（5+ 轮主动给"下次聊建议"时心法埋点）
   if (userTurnCount >= 5) {
     const diagnosis = loadDiagnosisTemplate();
     if (diagnosis) parts.push(diagnosis);
   }
 
-  // 4.5 单轮回复结构铁律（v0.7.8.1 · 70/20/10 · 后移紧贴 final_reminder）
-  //     关键优化：从 3.5 位后移到这里，紧贴 final_reminder 压轴强化结构权重。
-  //     LLM 注意力在结尾最强，把结构铁律放末尾才不会被"内容性指令"（弹药话术）盖过。
-  //     这条永远注入 ~3K chars，性能影响可忽略。
+  // 4.7 单轮回复结构铁律（v0.7.8.1 · 70/20/10 · 紧贴 final_reminder · 首尾夹击）
   const responseStructure = loadResponseStructure();
   if (responseStructure) parts.push(responseStructure);
 

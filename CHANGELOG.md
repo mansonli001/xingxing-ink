@@ -8,6 +8,70 @@
 
 ---
 
+## [v0.7.8.2] - 2026-05-11 — 「方法论文件精简 · Token 优化 27%」
+
+> **Patch · 质量不掉 token 省 27%** · 把方法论文件砍到 LLM 最佳消化区间。
+
+### Changed · 方法论文件双轨精简
+
+xingxing-ink-mind private repo 更新（commit ee7f7fd）：
+
+| 文件 | 原 | 现 | 节省 |
+|---|---|---|---|
+| `_matrix_v1.md` | 424 行 | 113 行 | -73% |
+| `_diagnosis_template.md` | 276 行 | 94 行 | -66% |
+| `_response_protocol.md` | 325 行 | 164 行 | -50% |
+| `arsenal_addon/casual.md` | 125 行 | 103 行 | -18% |
+| `arsenal_addon/rational.md` | 144 行 | 116 行 | -19% |
+| `arsenal_addon/scathing.md` | 142 行 | 98 行 | -31% |
+
+**双轨方案**：LLM 只读精简版；完整人类版备份到 `_full_*.md` 或 `_full/` 目录，供未来迭代参考。
+
+### Performance · System Prompt Token 优化
+
+| 场景 | v0.7.8.1 | **v0.7.8.2** | 节省 |
+|---|---|---|---|
+| 第 3 轮 | 19K tokens | **15K** | -21% |
+| 第 5 轮 | 22K tokens | **16K** | -27% |
+| 第 6+ 轮 | 22K tokens | **16K** | -27% |
+| 全触发 | 25K tokens | **18K** | -28% |
+
+**全部掉到 DeepSeek 注意力舒适区 (<18K tokens)**——首字延迟 -1.5s 预期，质量反而提升（长 prompt LLM 跳读的问题不再）。
+
+### 砍掉的内容类型（人类版仍保留）
+
+- 章节 0 总纲说明（LLM 不需要矩阵"为什么重要"）
+- 章节 7 护城河声明（是给人类看的营销话术）
+- 章节 6 使用心法（部分已被 `_response_structure.md` 覆盖）
+- v0.8.0 接口预留（LLM 不感知 UI）
+- 每条追问的"关键设计+反例"注解（LLM 只需要范本话术）
+- 实战 3 轮完整示例（重复性示例）
+
+### 无变化
+
+- 运行时行为与 v0.7.8.1 完全一致（methodology_loader 不动）
+- 所有弹药原文话术零删减（只砍元说明文字）
+
+---
+
+## [v0.7.8.1] - 2026-05-11 — 「结构铁律强化 · 首尾夹击法」
+
+> **Patch** · 修复 v0.7.8 首发后真机测试发现的 2 个铁律失守。
+
+### Fixed
+- 结构铁律失守：一轮挥 3 把刀（违反"3 轮挥完一题"）/ 末尾缺编号 forced choice
+- 根因：方法论层（matrix+arsenal_addon）在 prompt 中间挤占了 LLM 对 70/20/10 结构的注意力
+
+### Changed
+- `lib/prompts/index.ts` loadFinalReminder 强化：新增"结构铁律"分组（优先级最高 · 3 条）+ 原内容铁律降级
+- `_response_structure.md` 注入位置：3.5 位 → final_reminder 前（首尾夹击法）
+- 末尾明确"A/B/C 编号"forced choice 规定，"说吧你卡在哪"开放问句不算
+
+### Verified
+- scathing 档真机测试：70% diss + 单刀追问 + A/B/C 编号 + 6 竞品 + 4 数字全部达标
+
+---
+
 ## [v0.7.8] - 2026-05-11 — 「醒醒方法论矩阵 v1.0 · 五维融合 · 私藏架构 · 诊断师人格」
 
 > **大版本** · 把醒醒从「毒舌聊天 AI」升级为「带方法论的诊断师」。

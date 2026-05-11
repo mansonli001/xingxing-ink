@@ -10,6 +10,7 @@ import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
 import { SilhouetteBackdrop } from "./SilhouetteBackdrop";
 import { MicInput } from "./MicInput";
+import { track } from "../lib/analytics";
 
 interface ChatProps {
   mode: ModeId;
@@ -53,6 +54,13 @@ export function Chat({
    */
   async function handleFollowUp(anchor: string) {
     if (streaming) return;
+    // 埋点：用户点了「追问这一段」（核心交互——衡量内容是否被深读）
+    track("followup_clicked", {
+      mode,
+      turn_index: turnCount,
+      // 锚点长度区间（不传原文）
+      anchor_len: anchor.length,
+    });
     // 内部标记：给后端识别这是追问一键直发，不是普通用户消息
     // 格式：__FOLLOWUP__|锚点|自然话术
     const utterance = `就你刚才说的「${anchor}」——再深挖一层，别换话题、别重复你说过的话。`;

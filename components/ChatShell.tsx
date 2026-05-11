@@ -5,11 +5,65 @@ import { Chat } from "./Chat";
 import type { ChatMessageItem } from "./MessageBubble";
 import type { ModeId } from "./modeMeta";
 import { findPreset } from "../lib/presetReplies";
+import { track } from "../lib/analytics";
 
 function uid() {
   return `msg_${Date.now().toString(36)}_${Math.random()
     .toString(36)
     .slice(2, 8)}`;
+}
+
+/**
+ * 文本长度分桶（埋点用）—— 只记区间，不记内容
+ *   xs:  0-20   字  · 一句话试探
+ *   s:   21-80  字  · 简短想法
+ *   m:   81-200 字  · 完整描述
+ *   l:   201-500 字 · 长文/PRD 草稿
+ *   xl:  500+   字  · 巨幅扔过来
+ */
+function bucketTextLength(s: string): "xs" | "s" | "m" | "l" | "xl" {
+  const n = s.length;
+  if (n <= 20) return "xs";
+  if (n <= 80) return "s";
+  if (n <= 200) return "m";
+  if (n <= 500) return "l";
+  return "xl";
+}
+
+/**
+ * 错误分类（埋点用）—— 不传原文，只传类型
+ * 与 toFriendlyError 的判断逻辑保持一致
+ */
+function classifyError(rawMsg: string): string {
+  const m = (rawMsg || "").toLowerCase();
+  if (
+    m.includes("api key") ||
+    m.includes("apikey") ||
+    m.includes("unauthor") ||
+    m.includes("401") ||
+    m.includes("invalid")
+  )
+    return "auth";
+  if (m.includes("rate") || m.includes("429") || m.includes("too many"))
+    return "rate_limit";
+  if (
+    m.includes("timeout") ||
+    m.includes("network") ||
+    m.includes("fetch") ||
+    m.includes("aborted") ||
+    m.includes("econnreset")
+  )
+    return "network";
+  if (
+    m.includes("500") ||
+    m.includes("502") ||
+    m.includes("503") ||
+    m.includes("504")
+  )
+    return "5xx";
+  if (m.includes("4000") || m.includes("too long") || m.includes("超过"))
+    return "too_long";
+  return "unknown";
 }
 
 /**
@@ -115,8 +169,23 @@ export function ChatShell() {
 
   function clearAll() {
     abortRef.current?.abort();
+    // 仅在确实有内容时记录"清空重开"——空状态点没意义
+    if (messages.length > 0) {
+      track("session_cleared", {
+        mode,
+        turn_count: turnCount,
+      });
+    }
     setMessages([]);
     setSessionId(undefined);
+  }
+
+  /** 包一层 setMode：埋点 + 锁定后不让切换 */
+  function handleModeChange(next: ModeId) {
+    if (messages.length > 0) return; // 锁定后不允许切
+    if (next === mode) return;
+    track("mode_selected", { mode: next, from_mode: mode });
+    setMode(next);
   }
 
   async function sendMessageWith(rawText: string) {
@@ -131,7 +200,8 @@ export function ChatShell() {
     //        用户气泡显示一大坨 __FOLLOWUP__|...| 标记，极不专业。
     const apiText = text;
     let displayText = text;
-    if (text.startsWith("__FOLLOWUP__|")) {
+    const isFollowUp = text.startsWith("__FOLLOWUP__|");
+    if (isFollowUp) {
       const rest = text.slice("__FOLLOWUP__|".length);
       const sepIdx = rest.indexOf("|");
       if (sepIdx > 0) {
@@ -140,11 +210,28 @@ export function ChatShell() {
       }
     }
 
+    // ============ 埋点：发送消息（核心活跃指标）============
+    // 新一轮 turn_index = 当前 turnCount（已发 user msg 数）+ 1
+    const newTurnIndex = turnCount + 1;
+    // session 首条 = 标记 session_started，未来分析"启动率"
+    if (newTurnIndex === 1) {
+      track("session_started", { mode });
+    }
+    track("message_sent", {
+      mode,
+      turn_index: newTurnIndex,
+      is_followup: isFollowUp,
+      // 只记长度区间，不记原文（隐私保护）
+      length_bucket: bucketTextLength(displayText),
+    });
+
     // v0.4.2 预制快速路径：用户首次点击 EmptyState 9 个 tip 之一时，
     // 直接塞预制回复 + 预制 mp3，0 延迟、0 API 开销。
     // 仅在"完全空对话"状态下生效——后续追问全走真实 deepseek。
     const preset = messages.length === 0 ? findPreset(mode, text) : null;
     if (preset) {
+      // 埋点：命中预制路径（说明用户点了 EmptyState 的 tip 之一 → preset 命中率）
+      track("preset_tip_clicked", { mode });
       // v0.4.2.4 Bug2 修复：预制气泡逐段淡入，不再瞬间一次性出现
       //  · 第 1 段 0ms 立即显示（保留"炸裂感"，用户不必等）
       //  · 第 2 段起每段间隔 220ms 淡入（节奏自然不假）
@@ -293,6 +380,12 @@ export function ChatShell() {
         // 主动取消，不提示
       } else {
         const rawMsg = err instanceof Error ? err.message : "";
+        // 埋点：API 错误（按错误类型粗分类，用于看 deepseek 是否稳定）
+        track("api_error", {
+          mode,
+          turn_index: newTurnIndex,
+          error_type: classifyError(rawMsg),
+        });
         const friendlyMsg = toFriendlyError(rawMsg);
         setMessages((prev) =>
           prev.map((m) =>
@@ -317,7 +410,7 @@ export function ChatShell() {
   return (
     <Chat
       mode={mode}
-      onModeChange={setMode}
+      onModeChange={handleModeChange}
       messages={messages}
       streaming={streaming}
       turnCount={turnCount}

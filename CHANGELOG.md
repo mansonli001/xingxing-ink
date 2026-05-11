@@ -8,6 +8,70 @@
 
 ---
 
+## [v0.7.9.1] - 2026-05-11 — 「最小埋点 · 让产品脱离黑盒」
+
+> **Patch · 数据驱动启动** · 启用 Vercel Analytics 自定义事件
+> 把"多少人在用 / 怎么用 / 用几轮"从黑盒变成可看的数据。
+> 不记任何对话原文 — 只记事件 + 维度，符合隐私边界。
+
+### Added · 9 个核心事件
+
+新增 `lib/analytics.ts` — 统一埋点入口，基于 `@vercel/analytics/track`。
+
+| 事件 | 触发时机 | 维度 |
+|---|---|---|
+| `intro_played` | 开场动画完整播完（用户看到底部按钮再点击） | `phase` |
+| `intro_skipped` | 用户跳过开场（按钮/键盘/点空白） | `phase` |
+| `session_started` | 第一次发出消息正式开聊 | `mode` |
+| `session_cleared` | 点「清空重开」 | `mode`, `turn_count` |
+| `mode_selected` | 切换人格档（仅未开始对话时） | `mode`, `from_mode` |
+| `preset_tip_clicked` | 点 EmptyState 三档示例 tip 命中预制 | `mode` |
+| `message_sent` | 发出一条消息（核心活跃指标） | `mode`, `turn_index`, `is_followup`, `length_bucket` |
+| `followup_clicked` | 点「追问这一段」 | `mode`, `turn_index`, `anchor_len` |
+| `api_error` | DeepSeek 调用失败 | `mode`, `turn_index`, `error_type` |
+
+### 关键设计
+
+- **session_id**：每个 tab 一份，存 `sessionStorage`，刷新即重置 — 串联同一次访问的所有事件
+- **隐私边界**：消息只记 `length_bucket`（xs/s/m/l/xl），**绝不传原文**
+- **错误分类**：`auth`/`rate_limit`/`network`/`5xx`/`too_long`/`unknown`，跟 `toFriendlyError` 一致
+- **SSR 安全**：所有 `window`/`sessionStorage` 访问都加守卫，永远不抛错中断主流程
+- **数据保留**：Vercel Hobby 免费版 = 1 天滚动窗口；Pro 版 = 30 天
+
+### 看板路径
+
+Vercel Dashboard → `xingxing-ink` 项目 → 顶部 `Analytics` tab → `Events` 子页
+
+可看：
+- 每个事件的总量 + 时间分布
+- 维度过滤（按 `mode` / `turn_index` 切片）
+- 漏斗：`intro_played` → `mode_selected` → `session_started` → `message_sent(turn_index>=3)` → `followup_clicked`
+
+### Changed
+
+- `components/ChatShell.tsx` — 包了一层 `handleModeChange` 拦截切换；`sendMessageWith` 加 4 处埋点
+- `components/Chat.tsx` — `handleFollowUp` 加 1 处埋点
+- `components/WakeUpIntro.tsx` — `finish()` 拆 `auto`/`skip` 两路埋点
+
+### 验证清单（自测后做）
+
+- [ ] 浏览器开 DevTools → Network → 看 `/_vercel/insights/event` 请求
+- [ ] 触发 9 个事件各一次，看请求 payload 正确
+- [ ] 24h 后回 Vercel Analytics → Events 看是否有数据
+
+### 技术债
+
+- v0.7.9.1 仅依赖 Vercel Analytics 内置，没自建后端
+- 升级路径：v0.8 + 加 Supabase → 可看具体每个 session 的轨迹（要写隐私政策）
+
+### 工时
+
+- 实际花费 ~1h（远快于预估 1.5h，因为 `@vercel/analytics` 已经接好了，只补 `track` 调用）
+- 改 4 个文件 共 +200 行 / -10 行
+- tsc 0 错误 / 0 lint
+
+---
+
 ## [v0.7.9] - 2026-05-11 — 「12 问动态 Picker · Token 再省 17%」
 
 > **Minor 大版本** · 把全量方法论拆成「12 问独立文件」，按需注入。

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { track } from "../lib/analytics";
 
 /**
  * WakeUpIntro —— 醒醒开场动画
@@ -34,14 +35,27 @@ export function WakeUpIntro({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState(0);
   const [showSkip, setShowSkip] = useState(false);
 
-  const finish = useCallback(() => {
-    try {
-      sessionStorage.setItem("xx_intro_played", "1");
-    } catch {
-      // 隐私模式 sessionStorage 不可用，忽略
-    }
-    onDone();
-  }, [onDone]);
+  /**
+   * @param reason  "auto" = 用户看完动画走到底自然结束 ｜ "skip" = 用户主动跳过
+   *                 不传时按当前 phase 自动判断（phase>=10 视为已看完）
+   */
+  const finish = useCallback(
+    (reason?: "auto" | "skip") => {
+      try {
+        sessionStorage.setItem("xx_intro_played", "1");
+      } catch {
+        // 隐私模式 sessionStorage 不可用，忽略
+      }
+      // phase>=10 = 主按钮已经浮起，认为用户看到了完整动画
+      const finalReason = reason ?? (phase >= 10 ? "auto" : "skip");
+      track(finalReason === "skip" ? "intro_skipped" : "intro_played", {
+        // 跳过时记录用户在哪一阶段跳的（0-10）
+        phase,
+      });
+      onDone();
+    },
+    [onDone, phase]
+  );
 
   // 时间轴推进
   useEffect(() => {
@@ -84,7 +98,7 @@ export function WakeUpIntro({ onDone }: { onDone: () => void }) {
   return (
     <div
       className="fixed inset-0 z-[100] bg-xx-bg flex items-center justify-center overflow-hidden cursor-default"
-      onClick={canClickToSkip ? finish : undefined}
+      onClick={canClickToSkip ? () => finish("skip") : undefined}
       style={{ cursor: canClickToSkip ? "pointer" : "default" }}
     >
       {/* 玫瑰光晕底（极淡） */}
@@ -102,7 +116,7 @@ export function WakeUpIntro({ onDone }: { onDone: () => void }) {
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          finish();
+          finish("skip");
         }}
         className={`absolute top-5 right-5 sm:top-7 sm:right-8 text-[11px] tracking-[0.3em] font-display text-xx-text-dim hover:text-xx-rose transition-all duration-300 ${
           showSkip ? "opacity-70" : "opacity-0 pointer-events-none"

@@ -8,6 +8,140 @@
 
 ---
 
+## [v0.7.8] - 2026-05-11 — 「醒醒方法论矩阵 v1.0 · 五维融合 · 私藏架构 · 诊断师人格」
+
+> **大版本** · 把醒醒从「毒舌聊天 AI」升级为「带方法论的诊断师」。
+> 核心引入 BMC × PRD × JTBD × AARRR × Hooked × 心理三连五维融合矩阵，配套 70/20/10 单轮回复结构铁律 + 「3 轮挥完一题」节奏 + 「答不出来 SOP 三档差异化」+ 「醒醒诊断书 MVP 心法埋点」。同时落地骨架开源 + 弹药库私藏的混合安全架构。
+
+### Added · 五维融合方法论矩阵 v1.0（私藏 · 核心护城河）
+
+新建 `xingxing-ink-mind` private repo，本地 symlink 到 `lib/prompts/_methodology/` 和 `lib/prompts/arsenal_addon/`。
+
+- **`_methodology/_matrix_v1.md`**（424 行）—— 12 大商业本质问题，分 3 个 Block：
+  - Block 1 商业逻辑层（Q1-Q8）：为谁做 / 解决什么真痛 / 凭什么是你 / 用户怎么找到你 / 用户为什么留下 / 怎么收钱 / 成本结构 / 靠谁兜底
+  - Block 2 产品落地层（Q9-Q11）：MVP / 用户旅程 / 数据飞轮
+  - Block 3 创始人体检层（Q12 心理三连）：动机 / 止损 / 机会成本
+  - 每个本质问题用 2-3 个方法论交叉校验
+  - 三档主攻区分配（不互斥）：casual 戳人性脆弱、rational 数字逻辑碾压、scathing 见血封喉
+- **`_methodology/_diagnosis_template.md`**（276 行）—— 醒醒诊断书三章 + 进度条（X/12）+ 醒醒裁决书 + 下次聊建议四件套模板，三档差异化裁决书风格
+- **`_methodology/_response_protocol.md`**（325 行）—— 答不出来 SOP 决策树 + 三档差异化范本：
+  - casual 轻巧版（"啧——又一个'没想过'。行吧，姐先记着..."）
+  - rational 轻巧版（"嗯。Q4 我先标着——我们换个问题问..."）
+  - **scathing 毒蛇重版**（"'没想过'——我听过太多人说这三个字...我不浪费时间在不存在的答案上。下一题——"）
+  - 连续 2 题答不出来 → 升级停聊（三档差异化送客 + 召回钩子）
+  - 模糊答案处理 + 答非所问处理
+  - 反 PUA 红线四条
+- **`_methodology/_methodology_history.md`**（83 行）—— 迭代日志，v1.1+ 计划注入 YC office hour / Christensen 颠覆理论 / 虫二先生公众号复盘金句
+- **`arsenal_addon/{casual,rational,scathing}.md`**（共 411 行 · ~110 条主攻区毒蛇追问）
+
+### Added · 单轮回复结构铁律 v2.0（70/20/10）· 开源
+
+新建 `lib/prompts/dynamic/_response_structure.md`（111 行）：
+- 70% 大段 diss 正文（基于本轮挥的那把刀的方法论视角）
+- 20% 追问出刀（一轮 1 把刀，不一次挥 3 把）
+- 10% forced choice（2-3 个编号选项 · 沿用 v0.6.0 现有铁律）
+- rational/scathing 完全禁止虚认同语气词作为开场
+- casual"随便聊"首轮可加 1 句"听着挺美"缓冲
+
+### Added · 「3 轮挥完一题」节奏铁律 + 诊断书心法埋点
+
+`dynamic/turn_3_5.md` 末尾追加：
+- 一题 3 把刀分 3 轮挥完铁律（同题不连续 2 轮重复 / 第 4 轮才换下一题）
+- 选题策略（按用户画像选起手 Q）
+- 心智账本（醒醒每轮回复时心里维护"已挥刀"进度表）
+- 单题答不出来三档差异化处理桥接
+
+`dynamic/turn_6_plus.md` 末尾追加：
+- 诊断书心法埋点（5+ 轮主动给"下次聊建议"）
+- 三档差异化下次聊建议范本（casual 暖心 / rational 专业咨询师 / scathing 毒蛇但留情）
+- 反鸡汤红线（禁"加油" / "我等你"那种空召回）
+
+### Added · 三档 persona/*_core.md 末尾 v0.7.8 章节
+
+每档追加：
+- 单轮回复结构铁律呼应
+- 答不出来 SOP 三档差异化（casual/rational 轻巧 · scathing 毒蛇重版）
+- 主攻区与心智账本
+
+#### casual_core.md（嫌弃毛刺补强）
+- 嫌弃口头禅加密：「啧」「行吧」「姐告诉你」「你还真敢」「就这？」「醒醒」
+- 反激将：「这个简单的你总能答吧？」
+- 现实碾压（首轮黄金公式新增）：戳完痛点必举 1 个真实竞品/数字给用户看差距
+
+#### rational_core.md（御姐气场补强）
+- 加回「敢沉默」示例（「（停顿）」「（沉默）」明示）
+- 「逼实锤名单」（所有定性词逼成定量 / 实名 / 过程）
+- **字数下限 350 字**（御姐不说短话）
+- 专业术语直接用不解释（CAC / LTV / D7 / 北极星 / Churn / NPS / Unit Economics）
+- 冷静开场词：「嗯。」「讲完了？」「说。」
+
+#### scathing_core.md（毒蛇但反 PUA）
+- 标志性句式加密：揭动机 / 揭悖论 / 揭老底 / 俗比 / 见血
+- 答不出来 SOP **保留毒蛇重版**（不软化 · 不安慰 · 不留台阶）
+- 反 PUA 红线四条（不攻击人格 / 不嘲笑能力 / 不诅咒未来 / 不羞辱回家）
+- 核心：毒蛇是攻击逻辑漏洞，PUA 是攻击人本身——醒醒只做前者
+
+### Added · methodology_loader.ts（开源调用器骨架）
+
+新建 `lib/prompts/methodology_loader.ts`：
+- 暴露 5 个接口：`loadMethodology()` / `loadDiagnosisTemplate()` / `loadResponseProtocol(mode)` / `loadArsenalAddon(mode)` / `loadResponseStructure()`
+- 缺失文件全部返回空字符串（保底兜底，主流程不阻塞）
+- 独立缓存（不污染 index.ts 的 fileCache）
+- `checkMethodologyHealth()` dev 调试接口
+
+### Added · 按需注入策略（关键性能优化）
+
+`index.ts buildSystemPrompt` 改为分轮次按需注入，避免 25K+ tokens 注意力衰减：
+
+| 场景 | 注入内容 | 长度 |
+|---|---|---|
+| 第 1-2 轮 · 正常 | 原 v0.7.7 + 70/20/10 结构 | ~17K chars / ~10K tokens |
+| 第 3-5 轮 · 正常 | + matrix + arsenal_addon | ~32K chars / ~19K tokens |
+| 任意轮 · trigger 命中 | + response_protocol（5K）| 命中"不知道"/"没想过"/"大概"等 5+ trigger 词时叠加 |
+| 第 6+ 轮 · 正常 | + diagnosis_template | ~37K chars / ~22K tokens |
+
+对比改前的 25K tokens 全注入，**第 1-2 轮性能基本同 v0.7.7**，第 3+ 轮才进入完整方法论态。
+
+### Added · 骨架开源 + 弹药库私藏（混合安全架构）
+
+- 主 repo `xingxing-ink` 仍开源（人格骨架 + 调用器接口 + 5 维矩阵骨架描述）
+- 私藏 `xingxing-ink-mind` private repo（核心方法论实体 + 三档主攻区毒蛇追问）
+- 本地 dev：手动 git clone xingxing-ink-mind 到 sibling 目录 + symlink
+- Vercel 生产：`vercel.json` buildCommand 改为 `bash scripts/fetch-mind-repo.sh && next build`，用 `MIND_REPO_TOKEN` 环境变量做 GitHub PAT 拉 private repo + symlink + next build
+- `scripts/fetch-mind-repo.sh` 脚本带 fallback：token 未设置时跳过私藏拉取，主流程仍可工作（弱化为 v0.7.7 行为）
+- `.gitignore` 新增 `lib/prompts/_methodology/` 和 `lib/prompts/arsenal_addon/`（symlink 不进开源）
+
+### Changed · 不变红线（v0.7.4 架构 + 现有功能完整保留）
+
+- ✅ v0.7.4 分层架构：core / persona / dynamic / arsenal 完全保留
+- ✅ v0.7.5 / v0.7.6 / v0.7.7 现有 stripStageDirections 后处理完全保留
+- ✅ 现有线上功能：首轮黄金公式、情感兜底、9 条预制开场、TTS、人像呼吸、麦克风长按 全部零回归
+- ✅ 醒醒名字、三档 label/subtitle/description 不动
+- ✅ scathing 档 8/8 通过的核心人格只追加，不重写
+- ✅ `index.ts` buildSystemPrompt 主签名不变
+- ✅ `arsenal_picker.ts` 完全不动（按行业触发词命中保持原样；arsenal_addon 走独立 loader）
+- ✅ core/ 5 个铁律文件零修改
+
+### Migration Notes（部署到生产）
+
+主 repo 推送 main 后，**Vercel 自动部署会成功**——但首次部署方法论层会**为空**（fallback 模式 = v0.7.7 行为）。
+
+要让 v0.7.8 完整生效，需要 3 步手工动作（用户后续完成）：
+1. 在 GitHub 创建 `xingxing-ink-mind` private repo（用户名 `mansonli001`）
+2. 把本地 `../xingxing-ink-mind` 推送到该 repo
+3. 在 Vercel project 设置里加环境变量 `MIND_REPO_TOKEN`（GitHub PAT，repo 读权限）
+
+完成 3 步后，下次 Vercel build 自动拉私藏 repo + symlink + next build → 五维矩阵完整生效。
+
+### Risk Assessment
+
+- 🟢 主 repo 改动：tsc 0 错误，build 成功，所有现有功能保留
+- 🟢 private repo fallback：缺失全部返回空字符串，主流程不中断
+- 🟡 system prompt 长度：第 6+ 轮 22K tokens，DeepSeek 上下文够用但接近注意力衰减拐点（按需注入已最大限度优化）
+- 🟢 三档真机回归：依赖 private repo + Vercel token 配置完成后做（用户负责）
+
+---
+
 ## [v0.7.7] - 2026-05-10 — 「修复 · 追问标记漏出到用户气泡 + 锚点 markdown 清理」
 
 > 一句话总结：v0.7.3 的「追问这一段」一键直发，前端把 `__FOLLOWUP__|anchor|utterance` 整串既当 API payload 又当用户气泡内容渲染，结果用户看到一大坨 `__FOLLOWUP__|**一句话告诉我...|就你刚才说的「**一句话告诉我...」——再深挖一层` 垃圾标记。同时锚点里夹着 markdown `**加粗**` 符号也没清理。v0.7.7 在 `ChatShell.sendMessageWith` 里拆包：API 用完整 payload（后端识别），气泡和 state 只存自然话术。`MessageBubble.handleQuote` 抽锚点前清掉 md 符号。

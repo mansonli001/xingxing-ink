@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bash scripts/fetch-mind-repo.sh && next build",
   "functions": {
     "app/api/chat/stream/route.ts": {
       "maxDuration": 60

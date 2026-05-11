@@ -50,3 +50,7 @@ public/silhouettes/_before_cutout/
 
 # 研究目录（toxic-pm 逆向采样数据，不上传）
 /_research/
+
+# v0.7.8 私藏方法论与弹药（symlink 到 sibling private repo xingxing-ink-mind，绝不进开源）
+/lib/prompts/_methodology
+/lib/prompts/arsenal_addon

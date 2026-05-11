@@ -16,6 +16,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pickArsenal } from "./arsenal_picker";
+import {
+  loadMethodology,
+  loadDiagnosisTemplate,
+  loadResponseProtocol,
+  loadArsenalAddon,
+  loadResponseStructure,
+} from "./methodology_loader";
 
 export type ModeId = "casual" | "rational" | "scathing";
 
@@ -153,24 +160,106 @@ export function buildSystemPrompt(
 ): string {
   const parts: string[] = [];
 
-  // 1. Core 铁律（首位高权重）
+  // 1. Core 铁律（首位高权重 · 永远注入）
   parts.push(loadCore());
 
-  // 2. Persona 骨架（档位人设）
+  // 2. Persona 骨架（档位人设 · 永远注入）
   parts.push(loadPersona(mode));
 
   // 3. Dynamic 轮次片段
   parts.push(loadDynamic(userTurnCount));
+
+  // 3.5 单轮回复结构铁律（v0.7.8 · 70/20/10 · 永远注入 · ~3K chars 不重）
+  const responseStructure = loadResponseStructure();
+  if (responseStructure) parts.push(responseStructure);
 
   // 4. Arsenal 命中（按场景抽 2 条，无命中就省）
   const arsenalContext = `${userMessage}\n${historySummary}`;
   const arsenal = pickArsenal(arsenalContext, 2);
   if (arsenal) parts.push(arsenal);
 
+  // ====================================================================
+  // 4.x v0.7.8 方法论层（按需注入 · 私藏 symlink）
+  //
+  // 设计原则：避免 25K+ token 的 prompt 衰减 LLM 注意力。
+  // 不同轮次注入不同层，让 prompt 长度随对话深度递进。
+  //
+  // 注入策略：
+  //   - 第 1-2 轮：方法论层全部不注入（开场期，专注首轮黄金公式）
+  //   - 第 3+ 轮：注入 matrix（核心心法）+ arsenal_addon（三档主攻区弹药）
+  //   - 触发"答不出来": 注入 response_protocol（三档差异化 SOP）
+  //   - 第 5+ 轮：注入 diagnosis_template（诊断书心法埋点）
+  //
+  // 这样：
+  //   - 第 1-2 轮 prompt ~12K chars（同 v0.7.7）
+  //   - 第 3-5 轮 prompt ~25K chars（按需）
+  //   - 第 6+ 轮 prompt ~28K chars（含诊断书）
+  //   - 缺失文件全部返回空字符串保底，主流程可工作（弱化为 v0.7.7）
+  // ====================================================================
+
+  if (userTurnCount >= 3) {
+    // 4.1 五维矩阵（核心心法 · 第 3+ 轮才注入）
+    const methodology = loadMethodology();
+    if (methodology) parts.push(methodology);
+
+    // 4.3 三档主攻区弹药（按档抽 · 第 3+ 轮才注入）
+    const arsenalAddon = loadArsenalAddon(mode);
+    if (arsenalAddon) parts.push(arsenalAddon);
+  }
+
+  // 4.2 答不出来 SOP（按 trigger 词命中 · 任何轮次都可触发）
+  if (shouldInjectResponseProtocol(userMessage, historySummary)) {
+    const responseProtocol = loadResponseProtocol(mode);
+    if (responseProtocol) parts.push(responseProtocol);
+  }
+
+  // 4.4 诊断书模板（5+ 轮主动给"下次聊建议"时心法埋点）
+  if (userTurnCount >= 5) {
+    const diagnosis = loadDiagnosisTemplate();
+    if (diagnosis) parts.push(diagnosis);
+  }
+
   // 5. 最终提醒（尾位再强化，首尾夹击）
   parts.push(loadFinalReminder());
 
   return parts.join("\n\n---\n\n");
+}
+
+/**
+ * 检测用户消息是否包含"答不出来"信号——决定要不要注入 response_protocol。
+ *
+ * 命中策略：单纯 includes 子串匹配（与 arsenal_picker 同构）。
+ * 任何一轮的当前消息或最近历史里出现 trigger 词，就注入。
+ *
+ * 这样做避免每轮都注入 5K chars 的 SOP（90% 的对话用户都在好好答）。
+ */
+function shouldInjectResponseProtocol(
+  userMessage: string,
+  historySummary: string
+): boolean {
+  const text = `${userMessage}\n${historySummary}`;
+  // 答不出来 / 模糊 / 答非所问 三类 trigger
+  const triggers = [
+    "不知道",
+    "没想过",
+    "没考虑过",
+    "不太清楚",
+    "我也不确定",
+    "我不太确定",
+    "不太懂",
+    "想不出来",
+    "暂时没",
+    "还没想",
+    "大概",
+    "应该是",
+    "差不多",
+    "我猜",
+    "可能吧",
+    "估计",
+    "好像",
+    "也许",
+  ];
+  return triggers.some((kw) => text.includes(kw));
 }
 
 /**

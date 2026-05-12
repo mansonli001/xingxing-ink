@@ -6,6 +6,7 @@ import type { ChatMessageItem } from "./MessageBubble";
 import type { ModeId } from "./modeMeta";
 import { findPreset } from "../lib/presetReplies";
 import { track, sendHeartbeat } from "../lib/analytics";
+import { useChatPersistence } from "../hooks/useChatPersistence";
 
 function uid() {
   return `msg_${Date.now().toString(36)}_${Math.random()
@@ -159,6 +160,31 @@ export function ChatShell() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // v0.7.9.3 P4：会话持久化（localStorage 7天 TTL + 50条上限 + 隐私模式 fallback）
+  // 用户反馈："没有储存，我之前聊过的，关了，就不见了"
+  const { initial, hydrated, persist, clear: clearPersistence } =
+    useChatPersistence();
+
+  // mount 后用 initial 恢复 useState（隐性恢复，不弹"欢迎回来"提示）
+  useEffect(() => {
+    if (initial) {
+      setMode(initial.mode);
+      setSessionId(initial.sessionId);
+      setMessages(initial.messages);
+      // 埋点：会话恢复（用于看持久化的实际命中率）
+      track("session_restored", {
+        mode: initial.mode,
+        message_count: initial.messages.length,
+      });
+    }
+  }, [initial]);
+
+  // 状态变化后自动写入 localStorage（hydrated 后才写，避免覆盖刚恢复的数据）
+  useEffect(() => {
+    if (!hydrated) return;
+    persist({ mode, sessionId, messages });
+  }, [mode, sessionId, messages, hydrated, persist]);
+
   const turnCount = messages.filter((m) => m.role === "user").length;
 
   useEffect(() => {
@@ -178,6 +204,8 @@ export function ChatShell() {
     }
     setMessages([]);
     setSessionId(undefined);
+    // P4：同时清掉 localStorage，避免下次刷新又恢复出来
+    clearPersistence();
   }
 
   /** 包一层 setMode：埋点 + 锁定后不让切换 */

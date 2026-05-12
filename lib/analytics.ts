@@ -25,6 +25,7 @@ export type AnalyticsEvent =
   // 入场会话
   | "session_started" //       第一次发出消息，正式开聊（核心活跃指标）
   | "session_cleared" //       清空重开
+  | "session_restored" //      v0.7.9.3 P4：从 localStorage 恢复历史会话（看持久化命中率）
   // 互动
   | "mode_selected" //         用户切换人格档（casual/rational/scathing）
   | "preset_tip_clicked" //    点了 EmptyState 的示例 tip 一键发送
@@ -118,6 +119,8 @@ function mapToKvEvent(event: AnalyticsEvent): string | null {
       return "session_start"; // 命名对齐后端
     case "session_cleared":
       return "session_cleared";
+    case "session_restored":
+      return "session_restored";
     case "mode_selected":
       return "mode_selected";
     case "preset_tip_clicked":

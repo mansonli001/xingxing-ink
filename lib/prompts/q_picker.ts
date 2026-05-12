@@ -244,3 +244,38 @@ function pickNextQByMode(mode: ModeId, lastQ: string): string {
   // 简化：直接取 primary[0]（粘性 picker 会在下次粘住此 Q）
   return primary[0];
 }
+
+// ============================================================
+// v0.7.9.6 · 12 问命中数计数（用于前端 MatrixProgress 隐喻进度）
+// ============================================================
+
+/**
+ * 统计 history 里所有 assistant 消息出现过的"去重 Q 数量"
+ *
+ * 用途：前端 MatrixProgress 4×3 方块，根据数量逐个亮起
+ * 不暴露具体哪个 Q 命中——只暴露数字（0-12），保持隐喻化
+ *
+ * @param history 对话历史（按时间升序）
+ * @returns 0-12 之间的整数
+ */
+export function countDistinctQHit(
+  history: { role: string; content: string }[]
+): number {
+  if (!history || history.length === 0) return 0;
+  const hitSet = new Set<string>();
+  for (const msg of history) {
+    if (msg.role !== "assistant") continue;
+    if (!msg.content) continue;
+    for (const [Q, kws] of Object.entries(Q_KEYWORDS)) {
+      if (hitSet.has(Q)) continue; // 已命中，跳过
+      for (const kw of kws) {
+        if (msg.content.includes(kw)) {
+          hitSet.add(Q);
+          break; // 该 Q 已命中，跳出关键词循环
+        }
+      }
+    }
+    if (hitSet.size >= Object.keys(Q_KEYWORDS).length) break; // 全命中提前退
+  }
+  return hitSet.size;
+}

@@ -1162,3 +1162,366 @@ h3,
 .markdown-body strong {
   text-shadow: 0 0 6px var(--mode-color-soft);
 }
+
+/* ============================================
+ * v0.7.9.6 · 段落级渐入（辩手节奏）
+ *
+ * MessageBubble 把 LLM 输出按 \n\n 切段，每段独立渲染
+ * 新段（segment-fade-in）做 opacity+translateY 入场动画
+ * 旧段（segment-stable）保持稳定不重跑
+ *
+ * 性能：transform/opacity GPU 合成层，不触发 layout
+ * 节奏：350ms ease-out（比 fade-in 短一点点，让段落出现有"刀感"）
+ * ============================================ */
+.segment {
+  /* 段间距：补偿 markdown-body p 的 1.15em margin，让段间隔统一 */
+  margin-bottom: 0;
+}
+.segment + .segment {
+  /* 段间适度间距，独立段比单 p 拉得开一点（有"出刀"停顿感） */
+  margin-top: 0.6em;
+}
+.segment > :first-child {
+  margin-top: 0;
+}
+.segment > :last-child {
+  margin-bottom: 0;
+}
+.segment-fade-in {
+  animation: segment-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.segment-stable {
+  /* 稳定段：opacity 1 不参与动画，避免 SSE delta 让旧段闪烁 */
+  opacity: 1;
+}
+@keyframes segment-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .segment-fade-in {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ============================================
+ * v0.7.9.6 · 御姐风格 Toast
+ *
+ * 右上角浮入，暗色磨砂底 + 主题色边框 + 主题色发光
+ * 单 toast 模式，3.5s 自动消失，点击立即关闭
+ * ============================================ */
+.xx-toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 14px;
+  max-width: min(80vw, 380px);
+  background: rgba(20, 16, 26, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--mode-tag-border);
+  border-radius: 14px;
+  box-shadow:
+    0 8px 28px -10px rgba(0, 0, 0, 0.6),
+    0 0 18px -4px var(--mode-color-strong);
+  color: var(--mode-tag-fg);
+  font-family: "LXGW WenKai Screen", "LXGW WenKai", "Noto Serif SC", serif;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  cursor: pointer;
+  animation: xx-toast-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  user-select: none;
+}
+.xx-toast-out {
+  animation: xx-toast-out 0.26s ease-in both;
+}
+.xx-toast-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mode-color);
+  box-shadow: 0 0 6px var(--mode-color);
+  flex-shrink: 0;
+}
+.xx-toast-text {
+  flex: 1;
+}
+@keyframes xx-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes xx-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+@media (max-width: 499px) {
+  .xx-toast {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    font-size: 13.5px;
+    padding: 9px 14px 9px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xx-toast {
+    animation: none;
+  }
+  .xx-toast-out {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ============================================
+ * v0.7.9.6 · 抽屉式侧栏（SideDrawer）
+ *
+ * 默认隐藏，左上角小图标点开
+ * 桌面：从左滑入 280px
+ * 移动：全屏覆盖
+ * ============================================ */
+
+/* 触发按钮 */
+.xx-drawer-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(232, 180, 184, 0.55);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 4px;
+}
+.xx-drawer-trigger:hover {
+  background: var(--mode-tag-bg);
+  border-color: var(--mode-tag-border);
+  color: var(--mode-tag-fg);
+}
+
+/* 遮罩 */
+.xx-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 6, 14, 0);
+  z-index: 90;
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+.xx-drawer-overlay-open {
+  background: rgba(8, 6, 14, 0.55);
+  pointer-events: auto;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* 抽屉本体 */
+.xx-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  z-index: 95;
+  background: rgba(20, 16, 26, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right: 1px solid var(--mode-tag-border);
+  box-shadow:
+    14px 0 40px -12px rgba(0, 0, 0, 0.5),
+    0 0 30px -8px var(--mode-color-strong);
+  transform: translateX(-100%);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex;
+  flex-direction: column;
+}
+.xx-drawer-open {
+  transform: translateX(0);
+}
+@media (max-width: 499px) {
+  .xx-drawer {
+    width: 88vw;
+    max-width: 320px;
+  }
+}
+
+/* 抽屉头部 */
+.xx-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(232, 180, 184, 0.1);
+}
+.xx-drawer-title {
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--mode-tag-fg);
+  margin: 0;
+}
+.xx-drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(232, 180, 184, 0.55);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.xx-drawer-close:hover {
+  background: var(--mode-tag-bg);
+  color: var(--mode-tag-fg);
+}
+
+/* 抽屉中部 */
+.xx-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.xx-drawer-section-label {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  color: rgba(232, 180, 184, 0.45);
+  margin-bottom: 8px;
+  text-transform: lowercase;
+}
+.xx-drawer-card {
+  padding: 10px 12px;
+  background: rgba(31, 24, 40, 0.7);
+  border: 1px solid rgba(232, 180, 184, 0.1);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+.xx-drawer-card-current {
+  border-color: var(--mode-tag-border);
+  box-shadow: 0 0 14px -4px var(--mode-color-strong);
+}
+.xx-drawer-card-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mode-tag-fg);
+  letter-spacing: 0.05em;
+}
+.xx-drawer-card-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mode-color);
+  box-shadow: 0 0 6px var(--mode-color);
+}
+.xx-drawer-card-meta {
+  margin-top: 4px;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 12px;
+  color: rgba(232, 180, 184, 0.55);
+  letter-spacing: 0.04em;
+}
+.xx-drawer-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  border: 1px dashed rgba(232, 180, 184, 0.18);
+  border-radius: 10px;
+  text-align: center;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  color: rgba(232, 180, 184, 0.4);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+}
+.xx-drawer-empty-sub {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* 抽屉底部（12 问矩阵进度） */
+.xx-drawer-footer {
+  border-top: 1px solid rgba(232, 180, 184, 0.1);
+  padding: 14px 16px 16px;
+}
+
+/* ============================================
+ * v0.7.9.6 · 12 问矩阵隐喻化进度（MatrixProgress）
+ *
+ * 4×3 暗方块网格，跟着 q_progress 逐个亮起
+ * 无 tooltip / 无标签 / 无数字 · 纯视觉呼吸感
+ * ============================================ */
+.xx-matrix {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 2px;
+}
+.xx-matrix-cell {
+  width: 100%;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(58, 46, 68, 0.4);
+  border: 1px solid rgba(232, 180, 184, 0.08);
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.xx-matrix-cell-lit {
+  background: var(--mode-color);
+  border-color: var(--mode-color);
+  box-shadow: 0 0 6px var(--mode-color-strong);
+  animation: xx-matrix-pulse 1.4s ease-in-out infinite;
+}
+@keyframes xx-matrix-pulse {
+  0%, 100% {
+    opacity: 0.92;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xx-matrix-cell-lit {
+    animation: none;
+  }
+}

@@ -7,6 +7,8 @@ import type { ModeId } from "./modeMeta";
 import { findPreset } from "../lib/presetReplies";
 import { track, sendHeartbeat } from "../lib/analytics";
 import { useChatPersistence } from "../hooks/useChatPersistence";
+import { Toast } from "./Toast";
+import { SideDrawer } from "./SideDrawer";
 
 function uid() {
   return `msg_${Date.now().toString(36)}_${Math.random()
@@ -160,12 +162,17 @@ export function ChatShell() {
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // v0.7.9.6：抽屉式侧栏开关 + 重入 toast 文案（null 不显示） + 12 问命中数（隐喻进度）
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [qProgress, setQProgress] = useState(0);
+
   // v0.7.9.3 P4：会话持久化（localStorage 7天 TTL + 50条上限 + 隐私模式 fallback）
   // 用户反馈："没有储存，我之前聊过的，关了，就不见了"
   const { initial, hydrated, persist, clear: clearPersistence } =
     useChatPersistence();
 
-  // mount 后用 initial 恢复 useState（隐性恢复，不弹"欢迎回来"提示）
+  // mount 后用 initial 恢复 useState（v0.7.9.6：恢复时弹御姐风格 toast 提示重入）
   useEffect(() => {
     if (initial) {
       setMode(initial.mode);
@@ -176,6 +183,15 @@ export function ChatShell() {
         mode: initial.mode,
         message_count: initial.messages.length,
       });
+      // v0.7.9.6：御姐风格重入 toast（仅在恢复了真实对话时弹）
+      if (initial.messages.length > 0) {
+        const lines = [
+          "刚才聊到一半就跑了？",
+          "回来了？姐还以为你被扇怕了。",
+          "今天打算认真点不？",
+        ];
+        setToastMsg(lines[Math.floor(Math.random() * lines.length)]);
+      }
     }
   }, [initial]);
 
@@ -204,6 +220,7 @@ export function ChatShell() {
     }
     setMessages([]);
     setSessionId(undefined);
+    setQProgress(0); // v0.7.9.6：重置 12 问进度
     // P4：同时清掉 localStorage，避免下次刷新又恢复出来
     clearPersistence();
   }
@@ -379,6 +396,10 @@ export function ChatShell() {
             const data = JSON.parse(dataLine);
             if (eventName === "meta") {
               if (data.session_id) setSessionId(data.session_id);
+              // v0.7.9.6：12 问命中数兜底（缺失走 ?? 0，老后端不爆）
+              if (typeof data.q_progress === "number") {
+                setQProgress(data.q_progress);
+              }
             } else if (eventName === "delta") {
               setMessages((prev) =>
                 prev.map((m) =>
@@ -393,6 +414,10 @@ export function ChatShell() {
                   m.id === assistantMsg.id ? { ...m, done: true } : m
                 )
               );
+              // v0.7.9.6：done 事件再同步一次 q_progress（assistant 落地后命中数可能变）
+              if (typeof data.q_progress === "number") {
+                setQProgress(data.q_progress);
+              }
             } else if (eventName === "error") {
               throw new Error(data.message || "服务器错误");
             }
@@ -436,14 +461,26 @@ export function ChatShell() {
   }
 
   return (
-    <Chat
-      mode={mode}
-      onModeChange={handleModeChange}
-      messages={messages}
-      streaming={streaming}
-      turnCount={turnCount}
-      sendMessageWith={sendMessageWith}
-      clearAll={clearAll}
-    />
+    <>
+      <Chat
+        mode={mode}
+        onModeChange={handleModeChange}
+        messages={messages}
+        streaming={streaming}
+        turnCount={turnCount}
+        sendMessageWith={sendMessageWith}
+        clearAll={clearAll}
+        onOpenDrawer={() => setDrawerOpen(true)}
+      />
+      <SideDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        qProgress={qProgress}
+        turnCount={turnCount}
+      />
+      {toastMsg ? (
+        <Toast message={toastMsg} onClose={() => setToastMsg(null)} />
+      ) : null}
+    </>
   );
 }

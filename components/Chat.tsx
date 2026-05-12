@@ -12,6 +12,7 @@ import { SilhouetteBackdrop } from "./SilhouetteBackdrop";
 import { MicInput } from "./MicInput";
 import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
+import { DrawerTriggerButton } from "./SideDrawer";
 
 interface ChatProps {
   mode: ModeId;
@@ -21,6 +22,8 @@ interface ChatProps {
   turnCount: number;
   sendMessageWith: (text: string) => Promise<void> | void;
   clearAll: () => void;
+  /** v0.7.9.6：打开抽屉式侧栏（trigger 按钮挂在顶部状态栏左侧） */
+  onOpenDrawer?: () => void;
 }
 
 export function Chat({
@@ -31,6 +34,7 @@ export function Chat({
   turnCount,
   sendMessageWith,
   clearAll,
+  onOpenDrawer,
 }: ChatProps) {
   const [input, setInput] = useState("");
   /** v0.4：当前是否有 AI 消息在播放语音（驱动人像呼吸动效） */
@@ -110,6 +114,7 @@ export function Chat({
       {locked ? (
         <div className="relative z-10 px-4 sm:px-6 pt-3 pb-2 flex items-center justify-between border-b border-xx-border bg-xx-bg/85 backdrop-blur-sm">
           <div className="flex items-center gap-3 flex-wrap">
+            {onOpenDrawer ? <DrawerTriggerButton onClick={onOpenDrawer} /> : null}
             <h2 className="chat-session-title">
               醒醒
             </h2>

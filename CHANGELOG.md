@@ -8,6 +8,81 @@
 
 ---
 
+## [v0.7.9.6] - 2026-05-12 — 「交互人设强化（段落渐入 + 重入 toast + 抽屉框架 + 12 问隐喻进度）」
+
+> 用户感知目标：「姐姐活了」。
+> 核心交互升级：段落出现的"刀感"+ 御姐风格重入提示 + 抽屉式侧栏 + 12 问命中数隐喻可视化。
+
+### 段落级渐入（辩手节奏）
+
+新增 `SegmentedMarkdown` 子组件：把 LLM 输出按 `\n\n` 切段，每段独立渲染 + 段落入场 fade+slide 动画。
+**防闪烁机制**：useRef 缓存"已渲染过段数"，SSE delta 增量到来时只对新段加 `segment-fade-in` class，旧段保持 `segment-stable` 不重跑动画——避免 chunk 频繁触发让全部段闪烁。
+
+效果：「姐姐一刀一刀出」的辩手节奏感，不延迟整体响应速度（CSS animation 走 transform/opacity GPU 合成层，0 layout 触发）。
+
+### 御姐风格重入 Toast（专家2 建议）
+
+新增 `Toast` 通用组件——右上角浮入，暗色磨砂底 + 主题色边框 + 主题色发光，3.5s 自动消失，点击立即关闭。
+
+ChatShell mount 时如果恢复到了真实对话历史，从 3 条文案随机选一条触发：
+- `刚才聊到一半就跑了？`
+- `回来了？姐还以为你被扇怕了。`
+- `今天打算认真点不？`
+
+### 抽屉式侧栏（框架版）
+
+新增 `SideDrawer` + `DrawerTriggerButton` 组件。
+
+**触发**：仅 locked 状态（已开始对话）顶部状态栏左侧显示三横线图标。
+**桌面**：从左滑入 280px。
+**移动**：88vw 全屏覆盖（max 320px）。
+**交互**：遮罩点击关闭、ESC 关闭、锁页面滚动。
+
+**内容（v0.7.9.6 框架版，v0.7.9.7 接真数据）**：
+- 顶部：`姐替你熬过的` 标题
+- 当前会话卡片（已聊 N 轮）
+- 「熬过的项目」占位（v0.7.9.7 接 useChatPersistence 多桶接口）
+- 底部：12 问矩阵进度（MatrixProgress 组件）
+
+### 12 问矩阵隐喻化进度
+
+新增 `MatrixProgress` 组件 + 后端 SSE 增量字段。
+
+**视觉**：4×3 暗色方块网格，跟着 q_progress（0-12）逐个亮起；亮起的方块用主题色填充 + 主题色发光 + 1.4s 呼吸脉动。
+
+**数据来源**：
+- 后端 `lib/prompts/q_picker.ts` 新增 `countDistinctQHit(history)` 函数，统计 history 里 assistant 消息出现过的去重 Q 数量
+- `app/api/chat/stream/route.ts` 在 meta 事件 + done 事件追加 `q_progress: number` 字段
+- 前端 `ChatShell` 接 `q_progress` state，typeof number 兜底（老后端缺失走 0，不爆）
+
+**严守隐喻化原则**（用户拍板 Q2-A）：
+- **无 tooltip / 无标签 / 无数字**——只暴露视觉呼吸感，不告诉用户"这是 Q Picker"
+- 把「姐姐内部方法论」与「外部对话感」严格分层（坚决不暴露 12 问框架，跟 v0.7.9.4 反顾问引导人设保持一致）
+
+### Added
+
+- `components/Toast.tsx` · 御姐风格 toast 组件（右上角浮入 / 单 toast / 自动关闭）
+- `components/SideDrawer.tsx` · 抽屉式侧栏 + DrawerTriggerButton 触发按钮
+- `components/MatrixProgress.tsx` · 12 问矩阵 4×3 暗方块进度
+- `lib/prompts/q_picker.ts` · 新增 `countDistinctQHit(history)` 导出函数
+
+### Changed
+
+- `app/globals.css` · 新增 `.segment-fade-in/.segment-stable` 段落渐入、`.xx-toast/.xx-toast-out` toast、`.xx-drawer-*` 抽屉、`.xx-matrix-cell-lit` 矩阵亮起脉动
+- `components/MessageBubble.tsx` · 新增 SegmentedMarkdown 子组件，渲染层从单 ReactMarkdown 拆为多段独立渲染 + ref 缓存防闪烁
+- `components/ChatShell.tsx` · 新增 drawerOpen / toastMsg / qProgress 三个 state；mount 恢复对话时触发重入 toast；SSE meta/done 解析 q_progress；return 段挂 SideDrawer + Toast 组件
+- `components/Chat.tsx` · 新增 onOpenDrawer 可选 prop；locked 状态顶部状态栏左侧挂 DrawerTriggerButton
+- `app/api/chat/stream/route.ts` · meta 事件 + done 事件追加 q_progress 字段（assistant 落地前后两次同步）
+
+### 不在本批范围（v0.7.9.7 处理）
+
+- ⏭ 抽屉里"熬过的项目"接持久化多桶真数据
+- ⏭ 切档前确认弹窗 + 切档行为重写（按档分桶持久化）
+- ⏭ schema v1 → v2 平滑迁移
+- ⏭ 移动端键盘遮挡修复 + textarea 自适应
+
+---
+
 ## [v0.7.9.5] - 2026-05-12 — 「UX 视觉地基（三档主题色 + 气泡重构 + 加载人设化 + 关键词高亮）」
 
 > v0.7.9.5.0 紧急修复（输出污染双层兜底）已于 commit 35b40af 上线，本节追加 v0.7.9.5.1/5.2 两个子项。

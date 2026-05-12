@@ -2,7 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { AudioPlayer } from "./AudioPlayer";
 import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
@@ -123,6 +123,17 @@ export function MessageBubble({
     if (isUser) return safeContent;
     return autoHighlightKeywords(safeContent);
   }, [isUser, safeContent]);
+
+  // v0.7.9.6：段落级渐入（仅 AI · 流式时让段落"一段段出现"模拟辩手节奏）
+  // 切分策略：按 `\n\n` 切段，每段独立渲染为 div + 段索引 key
+  // 防闪烁机制：useRef 缓存"已渲染过段数"，content 增量到来时只对新增段加 fade-in class
+  // 旧段保持稳定不重跑动画（避免 SSE delta 每 chunk 都让全部段闪烁）
+  const segments = useMemo(() => {
+    if (isUser) return [highlightedContent];
+    if (!highlightedContent) return [];
+    return highlightedContent.split(/\n\n/);
+  }, [isUser, highlightedContent]);
+  const renderedCountRef = useRef(0);
 
   if (isUser) {
     return (
@@ -250,9 +261,10 @@ export function MessageBubble({
                 </span>
               </span>
             ) : (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {highlightedContent}
-              </ReactMarkdown>
+              <SegmentedMarkdown
+                segments={segments}
+                renderedCountRef={renderedCountRef}
+              />
             )}
           </div>
           {/* v0.4.2.4：
@@ -309,5 +321,55 @@ export function MessageBubble({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * v0.7.9.6 · 段落级渐入渲染器
+ *
+ * 把 markdown 文本按 `\n\n` 切段，每段独立渲染为 ReactMarkdown，
+ * 用 ref 缓存"已渲染过段数"——SSE 增量到来时只对新增段加 fade-in class，
+ * 旧段保持稳定不重跑动画。
+ *
+ * 视觉效果：辩手节奏——段落"一段段出现"模拟"姐姐一刀一刀出"
+ * 性能：CSS animation 走 transform/opacity 不触发 layout
+ */
+function SegmentedMarkdown({
+  segments,
+  renderedCountRef,
+}: {
+  segments: string[];
+  renderedCountRef: React.MutableRefObject<number>;
+}) {
+  // 当前回合段数（在每次渲染前快照）
+  const prevRendered = renderedCountRef.current;
+
+  // 渲染完成后更新 ref（下次比对用）
+  // 注意：在渲染期间不能直接写 ref，但函数式组件 return 之后浏览器渲染前 ref 已可写
+  // 所以这里我们用一个简单 lazy 模式：在 jsx 里用 IIFE 标记新段，渲染完后立刻更新
+  if (segments.length > prevRendered) {
+    // 推迟到下一帧再更新，避免 React StrictMode 双调用 effect 导致动画跳过
+    renderedCountRef.current = segments.length;
+  }
+
+  return (
+    <>
+      {segments.map((seg, i) => {
+        const isNew = i >= prevRendered;
+        return (
+          <div
+            key={i}
+            className={[
+              "segment",
+              isNew ? "segment-fade-in" : "segment-stable",
+            ].join(" ")}
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {seg}
+            </ReactMarkdown>
+          </div>
+        );
+      })}
+    </>
   );
 }

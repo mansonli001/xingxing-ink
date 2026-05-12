@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { streamChat, type ChatMessage } from "@/lib/deepseek";
 import { getMode, buildSystemPrompt, MODES, type ModeId } from "@/lib/prompts";
 import { sanitizeLLMOutput, sanitizeStreamSegments } from "@/lib/prompts/sanitizer";
+import { countDistinctQHit } from "@/lib/prompts/q_picker";
 import {
   appendMessage,
   getOrCreateSession,
@@ -113,7 +114,15 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        send("meta", { session_id: session.id, mode: modeId });
+        // v0.7.9.6：meta 事件追加 q_progress 字段（已命中的 12 问 Q 去重数量 0-12）
+        // 用于前端 MatrixProgress 隐喻进度方块亮起
+        // 注意：此时 user 当前消息已 appendMessage，但 assistant 尚未生成，统计的是历史已发生命中
+        const qProgressBefore = countDistinctQHit(session.history);
+        send("meta", {
+          session_id: session.id,
+          mode: modeId,
+          q_progress: qProgressBefore,
+        });
 
         let assistantText = "";
         // v0.7.6：流式后置过滤器，扫掉 LLM 仍漏掉的舞台指示/旁白（圆括号/方括号包裹的动作描写）
@@ -170,9 +179,13 @@ export async function POST(req: NextRequest) {
           content: assistantText,
         });
 
+        // v0.7.9.6：assistant 落地后重新统计 q_progress（本轮可能新命中 Q）
+        const qProgressAfter = countDistinctQHit(session.history);
+
         send("done", {
           session_id: session.id,
           full: assistantText,
+          q_progress: qProgressAfter,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "未知错误";

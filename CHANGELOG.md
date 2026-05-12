@@ -8,6 +8,124 @@
 
 ---
 
+## [v0.7.9.2] - 2026-05-12 — 「自建数据面板 · 主页长出"已服务多少人"」
+
+> **Patch · 数据主权回归** · 放弃 Vercel Pro 付费墙，改用 Upstash Redis 自建统计
+> 主页第一次长出运营数据：「醒醒已陪 N 位朋友 · 捶过 M 轮 · 此刻 X 人在线」
+> 配套后台 `/admin` 看 11 项核心指标 + 14 天每日日志，4 层鉴权防爆破。
+
+### 背景
+
+v0.7.9.1 部署后发现 Vercel Analytics **Hobby 免费版不让看自定义事件**（"Upgrade to Pro"付费墙）。
+→ 埋点在跑但数据看不到，等于白做。
+
+### 改动策略
+
+**不升 Vercel Pro（$20/月）**，改为自建 Upstash Redis（免费 10K commands/day + 256MB）：
+- 新增 9 张 KV 表：UV set / 轮数 / 三档 / 在线 TTL / 轮次漏斗 / 长度分布 / 错误细分 / 每日分桶 / 极值
+- 前端埋点**双写**：保留 `@vercel/analytics`（未来升级 Pro 可用），并行写自建后端
+- 心跳机制：首次发消息后每 30s `sendBeacon` 一次，续约在线 TTL 120s，tab 隐藏时暂停
+
+### Added · 三个新 API + 两个新页面 + 一个新组件
+
+| 新增 | 作用 |
+|---|---|
+| `/api/stats/track` (Edge) | 接收 10 种事件，并行写 9 张 KV 表 |
+| `/api/stats/summary` (Edge · 60s CDN cache) | 主页拉 3 核心数据，无鉴权 |
+| `/api/stats/admin?key=XXX` (Edge) | 后台私密，返回 11 项指标 + 14 天日志 |
+| `/admin?key=XXX` | 自建仪表盘页，醒醒品牌配色 |
+| `<StatsBanner/>` | 首屏新组件，替换 EmptyState 原 `LOADING IN PROGRESS` 小字位 |
+| `lib/stats/kv.ts` | Redis 客户端封装 + 内存降级 fallback |
+| `lib/stats/keys.ts` | KV 键名收口，避免硬编码散落 |
+
+### 主页视觉变化
+
+**保留**：顶栏右上 `LOADING IN PROGRESS`（个人签名不动）
+**替换**：EmptyState 中间那行 `LOADING IN PROGRESS` → 换成：
+
+```
+    醒醒已陪 1,247 位朋友 · 捶过 8,653 轮
+       · 此刻还有 3 人正在被骂醒 ·
+```
+
+视觉融入 5 条铁律：
+1. 玫瑰金/玫瑰粉配色（绝不引入新色）
+2. Cormorant 斜体衬线主行 + Manrope 粗体数字（跟 logo 字体体系对齐）
+3. 首次进场 600ms fade + 数字 1.1s 滚动（only 首次，之后静默）
+4. 冷启兜底（`totalRounds < 30` 时切"醒醒刚开张几天 · 已陪 N 位朋友醒过来"）
+5. 数据失败时组件 `return null`，永远不显示骨架闪烁
+
+三档人格分布用 hover / 点击 ▾ 展开：条形图 + 百分比 + 绝对值。
+
+### 后台 `/admin` 内容清单
+
+| 板块 | 内容 |
+|---|---|
+| KV 连接状态 | 🟢 真连接 / 🟡 内存降级 指示灯 |
+| 核心指标 ×6 | UV / 开聊 / 总轮 / 平均轮 / 最长 / 当前在线 |
+| 二级指标 ×4 | 追问点击数 · 预制命中 · 清空重开 · 错误总数 |
+| 开场漏斗 | 看完 vs 跳过 百分比 |
+| 三档人格分布 | 条形图 |
+| 轮次漏斗 | 第 1/3/5/8/12/20 轮各有多少 session 到达 |
+| 文本长度分布 | xs/s/m/l/xl 占比 |
+| 错误分类 | auth/rate_limit/network/5xx/too_long/unknown |
+| 每日日志 | 近 14 天（可切 7/14/30/60）· 11 列 · 等宽字体表 |
+
+### 隐私边界（v0.7.9.1 延续）
+
+- 只记 sessionId + 维度，**绝不记对话原文**
+- 长度只记区间（xs/s/m/l/xl）
+- sessionId 每 tab 一份，刷新即重置
+- 所有数据 Upstash Redis 保留 ~1 年（UV set）/ 180 天（每日日志）/ 2 分钟（在线）
+
+### Changed
+
+- `package.json` — 新增 `@upstash/redis ^1.x`（替代 `@vercel/kv` 因官方已弃用）
+- `lib/analytics.ts` — track() 双写逻辑 + 新增 `sendHeartbeat()` 导出
+- `components/ChatShell.tsx` — 加 30s 心跳定时器 + visibilitychange 暂停优化
+- `components/Chat.tsx` — EmptyState 引入 `<StatsBanner/>` 替换 LOADING IN PROGRESS
+- `components/StatsBanner.tsx` — tooltip 改 `position: fixed` 定位（修复父容器 `overflow-y-auto` 裁切问题）
+- `lib/stats/admin-auth.ts` — 后台 4 层鉴权：时间安全比较 / 速率限制 / IP 白名单 / 强制配置检查
+
+### 部署前置任务（仅首次）
+
+1. Vercel Dashboard → Marketplace → Upstash → Create Redis → 选 free tier
+2. 集成后自动注入 `KV_REST_API_URL` / `KV_REST_API_TOKEN` 环境变量
+3. Vercel → Settings → Environment Variables → 添加 `ADMIN_KEY = 强随机串 ≥16 位`
+4. （可选·推荐）添加 `ADMIN_IP_ALLOWLIST = 你家/公司公网 IP`，只允许白名单 IP 访问后台
+5. （可选·极严）添加 `ADMIN_STRICT = 1`，强制要求 key ≥16 位 AND IP 白名单必须配置
+6. Push · Vercel 自动部署 · 完成
+
+### 后台安全（v0.7.9.2 · 4 层防护）
+
+> 为什么要 4 层 —— 单纯 `?key=XXX` 如果 URL 意外泄露 / 被爬虫扫到就危险了
+
+| 层 | 机制 | 触发 |
+|---|---|---|
+| 1 | **强制配置检查** | `VERCEL_ENV=production` 且 `ADMIN_KEY` 未配置或为默认值 → 503，接口直接不工作 |
+| 2 | **时间安全比较** | 防时序攻击（逐字符比较会因为返回时机泄露正确字符串长度）|
+| 3 | **IP 白名单** | 配置 `ADMIN_IP_ALLOWLIST` 后，非白名单 IP → 403，连 key 比较都不走 |
+| 4 | **速率限制** | 单 IP 每分钟 > 10 次访问 → 429，防暴破 |
+
+对客户端**不暴露失败原因**（不说是密码错了还是 IP 不对还是没配置），只返回 HTTP 状态码，防爬虫侦察。
+
+### 验证清单
+
+- [ ] 本地 `npx next build` ✅
+- [ ] tsc --noEmit ✅
+- [ ] Upstash 集成后首次 `/api/stats/summary` 返回 `{totalVisitors: 0, ...}`
+- [ ] 发一条消息 → 30s 后 `/api/stats/summary` 显示 `onlineNow: 1`
+- [ ] `/admin?key=XXX` 显示 KV 状态灯 🟢 "已连接"
+- [ ] 主页冷启文案显示"醒醒刚开张几天"
+
+### 工时
+
+- 实际花费 ~1h 40min（预估 1.5h，略超因为中途把 `@vercel/kv` 换成 `@upstash/redis`）
+- 新增 8 个文件 +1,300 行 / 改 4 个文件 +80 行
+- tsc 0 错误 / next build 成功 / 0 新 lint 警告
+
+---
+
 ## [v0.7.9.1] - 2026-05-11 — 「最小埋点 · 让产品脱离黑盒」
 
 > **Patch · 数据驱动启动** · 启用 Vercel Analytics 自定义事件

@@ -10,6 +10,7 @@ import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
 import { SilhouetteBackdrop } from "./SilhouetteBackdrop";
 import { MicInput } from "./MicInput";
+import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 
 interface ChatProps {
@@ -299,9 +300,10 @@ function EmptyState({
       <div className="text-xx-text-dim text-sm mb-1 font-serif italic tracking-wider">
         别做梦了
       </div>
-      <div className="text-xx-gold text-[11px] tracking-[0.4em] mb-8 font-display font-semibold">
-        LOADING IN PROGRESS
-      </div>
+      {/* v0.7.9.2：替换原 LOADING IN PROGRESS 小字为运营数据条
+           · 保留顶栏右上角的 LOADING IN PROGRESS 作为个人签名
+           · 这里换成实时统计：让访客感到"真有人在用" */}
+      <StatsBanner />
       <div className="w-full max-w-lg space-y-2">
         <p className="text-xs text-xx-text-dim mb-2 font-serif italic tracking-wider">
           可以试试这样开始（点一下直接送进去）

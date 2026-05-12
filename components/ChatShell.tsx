@@ -5,7 +5,7 @@ import { Chat } from "./Chat";
 import type { ChatMessageItem } from "./MessageBubble";
 import type { ModeId } from "./modeMeta";
 import { findPreset } from "../lib/presetReplies";
-import { track } from "../lib/analytics";
+import { track, sendHeartbeat } from "../lib/analytics";
 
 function uid() {
   return `msg_${Date.now().toString(36)}_${Math.random()

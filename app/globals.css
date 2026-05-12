@@ -1525,3 +1525,193 @@ h3,
     animation: none;
   }
 }
+
+/* ============================================
+ * v0.7.9.5.3 · 醒醒盖章句（KillStamp · 版本 1 极简侧边线）
+ *
+ * 4px 主题色左竖线 + 「醒醒 ·」前缀 + 17px 稍加粗 + 主题色微发光
+ * 始终在气泡末段，是这一段的灵魂总结
+ * ============================================ */
+.kill-stamp {
+  margin-top: 1em;
+  padding: 8px 0 8px 14px;
+  border-left: 4px solid var(--mode-color);
+  font-family: "Noto Serif SC", "Songti SC", "PingFang SC", serif;
+  font-size: 16.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--mode-tag-fg);
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 8px var(--mode-color-soft);
+  animation: kill-stamp-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  position: relative;
+}
+.kill-stamp::before {
+  /* 左竖线主题色微光 */
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--mode-color);
+  box-shadow: 0 0 8px var(--mode-color-strong);
+  border-radius: 2px;
+}
+.kill-stamp-prefix {
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--mode-color);
+  letter-spacing: 0.06em;
+  margin-right: 2px;
+}
+.kill-stamp-text {
+  /* 跟前缀同色但 fg 主色更亮 */
+}
+@keyframes kill-stamp-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kill-stamp {
+    animation: none;
+  }
+}
+@media (max-width: 499px) {
+  .kill-stamp {
+    font-size: 15.5px;
+    padding-left: 12px;
+  }
+}
+
+/* ============================================
+ * v0.7.9.5.3 · 选项按钮组（OptionButtons · ABC 一键发送）
+ *
+ * 暗灰底圆角按钮，每个选项独占一行，hover 时变主题色
+ * 点击后变灰显示「已选择：X」并自动发送给后端
+ * ============================================ */
+.option-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 4px;
+  animation: option-buttons-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.option-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: rgba(40, 32, 50, 0.6);
+  border: 1px solid rgba(232, 180, 184, 0.16);
+  border-radius: 10px;
+  color: var(--xx-text);
+  text-align: left;
+  cursor: pointer;
+  font-family: "PingFang SC", "Noto Serif SC", serif;
+  font-size: 14.5px;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  font-weight: 400;
+}
+.option-btn:hover:not(:disabled) {
+  background: var(--mode-color-soft);
+  border-color: var(--mode-color);
+  color: var(--mode-tag-fg);
+  transform: translateY(-1px);
+  box-shadow: 0 0 14px -4px var(--mode-color-strong);
+}
+.option-btn:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.option-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.option-btn-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--mode-color);
+  color: #14101a;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  margin-top: 1px;
+  box-shadow: 0 0 6px -2px var(--mode-color-strong);
+}
+[data-mode="scathing"] .option-btn-letter {
+  color: #fff5f0;
+}
+[data-mode="rational"] .option-btn-letter {
+  color: #14101a;
+}
+[data-mode="casual"] .option-btn-letter {
+  color: #fff5f8;
+}
+.option-btn-text {
+  flex: 1;
+  word-break: break-word;
+}
+.option-btn-picked {
+  /* 已选状态：灰底 + 主题色边 + 锁定 */
+  background: rgba(40, 32, 50, 0.4);
+  border-color: var(--mode-color);
+  color: var(--mode-tag-fg);
+}
+.option-btn-picked .option-btn-letter {
+  opacity: 0.85;
+}
+.option-btn-meta {
+  display: block;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  font-style: italic;
+  font-size: 11.5px;
+  color: var(--mode-color);
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+  opacity: 0.85;
+}
+@keyframes option-buttons-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .option-buttons {
+    animation: none;
+  }
+  .option-btn:hover:not(:disabled) {
+    transform: none;
+  }
+}
+@media (max-width: 499px) {
+  .option-btn {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .option-btn-letter {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+}

@@ -108,6 +108,10 @@ function stripLineHeadEmoji(line: string): string {
  *   3. 段内每行：剥行首 emoji
  *   4. 重新拼回
  *
+ * v0.7.9.5.3 增强：
+ *   - KILL 标记保护：[KILL]xxx[/KILL] 段绝不被任何黑名单误伤（白名单优先级最高）
+ *   - 引号自动加粗：「xxx」/ "xxx" 中的强调词自动转成 **xxx** markdown 加粗
+ *
  * @param text 原始 LLM 输出（可以是完整一条，也可以是 SSE 累积内容）
  * @returns 清理后的文本；若全部段被剥掉返回空串
  */
@@ -117,10 +121,71 @@ export function sanitizeLLMOutput(text: string): string {
   const paragraphs = text.split(/\n\n/);
 
   const cleaned = paragraphs
-    .filter((p) => !shouldStripParagraph(p))
-    .map((p) => p.split("\n").map(stripLineHeadEmoji).join("\n"));
+    .filter((p) => {
+      // v0.7.9.5.3：KILL 标记段绝不剥（白名单最高优先级，防止误伤）
+      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return true;
+      return !shouldStripParagraph(p);
+    })
+    .map((p) => {
+      // 段内行首 emoji 剥离（保留 KILL 段不动）
+      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return p;
+      return p.split("\n").map(stripLineHeadEmoji).join("\n");
+    });
 
   return cleaned.join("\n\n");
+}
+
+/**
+ * v0.7.9.5.3 · 引号包裹强调词自动加粗
+ *
+ * 把「xxx」中文方括号引号、"xxx" 中文双引号 中的内容自动转成 **xxx** markdown 加粗。
+ * （仅限 2-12 字以内的"短语"，避免把整段对话也包进去）
+ *
+ * 边界保护：
+ *   - 已在 ` ` 反引号内（行内代码）→ 不动
+ *   - 已在 ``` ``` 代码块内 → 不动
+ *   - 已在 ** ** 内（已加粗）→ 不动
+ *   - KILL 段内 → 不动（保留原话原样）
+ *   - 长度 > 12 字 → 不动（这是引号引用的长句而不是强调词）
+ *
+ * @param text markdown 文本
+ * @returns 转换后的文本
+ */
+export function autoBoldQuotedEmphasis(text: string): string {
+  if (!text) return text;
+
+  // 切段：先把 KILL 段保护起来，处理完再拼回
+  const parts = text.split(/(\[KILL\][\s\S]*?\[\/KILL\])/g);
+
+  return parts
+    .map((part) => {
+      // KILL 段保留原样
+      if (part.startsWith("[KILL]")) return part;
+
+      // 用同一套切分模式保护已包裹片段（反引号/已加粗/代码块）
+      const subParts = part.split(
+        /(```[\s\S]*?```|`[^`\n]*`|\*\*[^*\n]+\*\*)/g
+      );
+
+      return subParts
+        .map((sub, i) => {
+          if (i % 2 === 1) return sub; // 已包裹段保留
+          // 中文方括号引号 「xxx」 → **xxx**
+          //   要求：xxx 长度 1-12 字符，不含换行
+          let processed = sub.replace(
+            /「([^「」\n]{1,12})」/g,
+            "**$1**"
+          );
+          // 中文双引号 "xxx" → **xxx**
+          processed = processed.replace(
+            /"([^"\n]{1,12})"/g,
+            "**$1**"
+          );
+          return processed;
+        })
+        .join("");
+    })
+    .join("");
 }
 
 /**

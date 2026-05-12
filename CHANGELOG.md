@@ -8,6 +8,85 @@
 
 ---
 
+## [v0.7.9.5.3] - 2026-05-12 — 「输出仪式三件套：ABC 按钮化 + KILL 盖章句 + 引号自动加粗」
+
+> 用户感知目标：「姐姐的刀法变了」。
+> 核心升级：把 LLM 输出的 3 个关键结构（ABC 选择题 / 灵魂总结句 / 观点强调）从纯文本升级为专属 UI，体验从"读聊天"变"被审判"。
+
+### ABC 选项按钮化（专家 2 P0）
+
+- 新增 `components/OptionButtons.tsx` + `extractOptions()` 工具函数
+- **识别策略**：末段正则切出 A/B/C/D 选项，要求 ≥2 个 + 字符 ≥8 + 字母连续（A→B→C）+ AI 消息已 done
+- **渲染**：暗灰底圆角按钮 + hover 主题色发光 + 移动端文案完整换行 + 主题色圆形字母标
+- **交互**：点击后 280ms 显示"已选择：A"灰态 → 自动把 `A` 当成用户消息发送 → 其他选项禁用锁定
+- **prompt 约束**：`index.ts` 追加铁律强制 ABC 每个选项独立成行（避免同行连写被拒识别）
+
+### 醒醒盖章句 KillStamp（版本 1 · 极简侧边线）
+
+- 新增 `components/KillStamp.tsx` + `extractKillStamp()` 工具函数
+- **格式**：LLM 在每条回复结尾输出 `[KILL]xxx[/KILL]` 标记
+- **渲染**：4px 主题色左竖线 + 「醒醒 ·」楷书前缀 + 17px 稍加粗 + 主题色微发光 + 自左 rise 入场
+- **规则**（`lib/prompts/index.ts` 追加）：
+  - 字数：15-40 字
+  - 调性三档差异化：casual 温柔嘲讽 / rational 冷峻诊断 / scathing 直白扇耳光
+  - 位置：永远最末段，独立成段（前后 `\n\n` 隔开）
+  - 铁律：漏写即违反铁律
+- **保护机制**：
+  - sanitizer 白名单优先级最高（KILL 段绝不被黑名单误伤，含 emoji 也保留原样）
+  - 引号自动加粗不动 KILL 段（保留原话原味）
+- **复制/朗读兼容**：
+  - 复制时把 `[KILL]xxx[/KILL]` 还原为 `醒醒：xxx` 可读形式
+  - TTS 朗读时把 KILL 拼到末尾念出
+
+### 关键词高亮深化（引号自动加粗）
+
+- `lib/prompts/sanitizer.ts` 新增 `autoBoldQuotedEmphasis()` 工具
+- 把 `「xxx」` / `"xxx"` 中 1-12 字的强调词自动转成 `**xxx**`，复用 v0.7.9.5.2 玫瑰金 strong + 主题色发光
+- **边界保护**：
+  - 已在 ` ` 反引号内 → 不动
+  - 已在 `**` 内 → 不动
+  - 已在 ` ``` ` 代码块内 → 不动
+  - KILL 段内 → 不动（保留原话原味）
+  - 长度 > 12 字 → 不动（避免把整段引用包进去）
+- `prompt` 追加指令让 LLM 自己在重要观点词上用 `**xxx**` 加粗（每段 2-4 处）
+
+### 健康检查
+
+`scripts/_v0795_sanitizer_health.mjs` 从 35/35 升级到 **50/50 全 PASS**：
+- Test 10 新增 5 个 KILL 保护用例
+- Test 11 新增 6 个引号自动加粗边界用例
+- Test 12 新增 3 个完整链路组合用例
+
+### Added
+
+- `components/KillStamp.tsx` · 极简侧边线金句组件 + `extractKillStamp()` 导出
+- `components/OptionButtons.tsx` · ABC 按钮组件 + `extractOptions()` 导出
+- `lib/prompts/sanitizer.ts` · `autoBoldQuotedEmphasis()` 引号自动加粗工具
+
+### Changed
+
+- `app/globals.css` · 新增 `.kill-stamp` 极简侧边线样式 + `.option-buttons/.option-btn` 按钮组样式
+- `components/MessageBubble.tsx` · 渲染管线重构：`safeContent → extractKillStamp → contentWithoutKill → extractOptions → contentForRender → autoHighlight + autoBoldQuoted → segments`；渲染树追加 OptionButtons 和 KillStamp；复制/引用/朗读全部感知 KILL 拆分
+- `components/Chat.tsx` · MessageBubble 透传 `onPickOption={(l) => sendMessageWith(l)}` + `streaming`
+- `lib/prompts/index.ts` · `loadFinalReminder` 末尾追加"输出仪式三件套"指令段（ABC 换行 + 观点词加粗 + KILL 标记铁律）
+- `lib/prompts/sanitizer.ts` · `sanitizeLLMOutput` 升级加 KILL 白名单保护
+
+### 不影响范围
+
+- ✅ v0.7.9.5.0 sanitizer 污染过滤完全兼容（35/35 原用例全 PASS）
+- ✅ v0.7.9.5.1 三档主题色 0 改动
+- ✅ v0.7.9.5.2 关键词高亮白名单 0 改动（在 autoHighlightKeywords 之后追加 autoBoldQuoted）
+- ✅ v0.7.9.6 段落渐入 / toast / 抽屉 / 12 问矩阵 0 改动
+- ✅ 用户消息原样保留（所有处理仅作用于 AI 消息）
+
+### LLM 漏标兜底
+
+如果 LLM 某次漏写 `[KILL]xxx[/KILL]`，KillStamp 不显示，回复正常呈现。**不崩溃**。
+
+如果 LLM 把 `[KILL]` 标记跨 `\n\n` 边界写坏，sanitizer 不会把它当金句处理，会作为普通文本显示（用户会看到 `[KILL]xxx[/KILL]` 字样），此时用户反馈我们再迭代 prompt 约束。概率极低且有明显日志。
+
+---
+
 ## [v0.7.9.6] - 2026-05-12 — 「交互人设强化（段落渐入 + 重入 toast + 抽屉框架 + 12 问隐喻进度）」
 
 > 用户感知目标：「姐姐活了」。

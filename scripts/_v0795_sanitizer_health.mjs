@@ -63,9 +63,36 @@ function sanitizeLLMOutput(text) {
   if (!text) return text;
   const paragraphs = text.split(/\n\n/);
   const cleaned = paragraphs
-    .filter((p) => !shouldStripParagraph(p))
-    .map((p) => p.split("\n").map(stripLineHeadEmoji).join("\n"));
+    .filter((p) => {
+      // v0.7.9.5.3：KILL 标记段绝不剥
+      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return true;
+      return !shouldStripParagraph(p);
+    })
+    .map((p) => {
+      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return p;
+      return p.split("\n").map(stripLineHeadEmoji).join("\n");
+    });
   return cleaned.join("\n\n");
+}
+
+// v0.7.9.5.3 · 引号包裹自动加粗
+function autoBoldQuotedEmphasis(text) {
+  if (!text) return text;
+  const parts = text.split(/(\[KILL\][\s\S]*?\[\/KILL\])/g);
+  return parts
+    .map((part) => {
+      if (part.startsWith("[KILL]")) return part;
+      const subParts = part.split(/(```[\s\S]*?```|`[^`\n]*`|\*\*[^*\n]+\*\*)/g);
+      return subParts
+        .map((sub, i) => {
+          if (i % 2 === 1) return sub;
+          let processed = sub.replace(/「([^「」\n]{1,12})」/g, "**$1**");
+          processed = processed.replace(/"([^"\n]{1,12})"/g, "**$1**");
+          return processed;
+        })
+        .join("");
+    })
+    .join("");
 }
 
 function sanitizeStreamSegments(buffer) {
@@ -258,6 +285,91 @@ assertEq("流式 rest 是不完整尾巴", rest3, "下一段不完整");
 console.log("\nTest 9 · 边界条件");
 assertEq("空字符串 → 空字符串", sanitizeLLMOutput(""), "");
 assertEq("纯换行 → 纯换行", sanitizeLLMOutput("\n\n\n"), "\n\n\n");
+
+// ----------------------------------------------------------------------
+// Test 10 · v0.7.9.5.3 · KILL 标记保护
+// ----------------------------------------------------------------------
+console.log("\nTest 10 · KILL 标记保护（不被任何黑名单误伤）");
+const killCase = `正文 diss 段
+
+[KILL]你给的是工具，用户要的是结果，这就是所有工具类产品的死穴。[/KILL]`;
+const killClean = sanitizeLLMOutput(killCase);
+assertContains("KILL 段被完整保留", killClean, "[KILL]", true);
+assertContains("KILL 内容被完整保留", killClean, "工具类产品的死穴", true);
+assertContains("正文段保留", killClean, "正文 diss 段", true);
+
+// 极端：KILL 段 emoji 不被剥（保留原样）
+const killWithEmoji = `[KILL]🔴 这就是死穴 🟢[/KILL]`;
+assertEq(
+  "KILL 段内 emoji 不被剥",
+  sanitizeLLMOutput(killWithEmoji),
+  killWithEmoji
+);
+
+// 极端：KILL 标记不会被段首黑名单误伤（KILL 段开头是 [KILL]，不在黑名单）
+const killWithBadHead = `⚠️ 当前轮次：第 1 轮
+
+[KILL]这句必须留下[/KILL]`;
+const killWithBadClean = sanitizeLLMOutput(killWithBadHead);
+assertContains("污染段被剥", killWithBadClean, "当前轮次", false);
+assertContains("KILL 段保留", killWithBadClean, "[KILL]这句必须留下[/KILL]", true);
+
+// ----------------------------------------------------------------------
+// Test 11 · v0.7.9.5.3 · 引号自动加粗
+// ----------------------------------------------------------------------
+console.log("\nTest 11 · 引号包裹自动加粗");
+assertEq(
+  "中文方括号引号「xxx」→ **xxx**",
+  autoBoldQuotedEmphasis("用户要的是「结果」不是工具"),
+  "用户要的是**结果**不是工具"
+);
+assertEq(
+  '中文双引号 "xxx" → **xxx**',
+  autoBoldQuotedEmphasis('他要的是"结果"'),
+  "他要的是**结果**"
+);
+assertEq(
+  "已加粗 **xxx** 不动",
+  autoBoldQuotedEmphasis("**已加粗** 和「新加粗」"),
+  "**已加粗** 和**新加粗**"
+);
+assertEq(
+  "代码段内引号不动",
+  autoBoldQuotedEmphasis("`「不要动」`"),
+  "`「不要动」`"
+);
+assertEq(
+  "KILL 段内引号不动（保留原话）",
+  autoBoldQuotedEmphasis("[KILL]他要的是「结果」[/KILL]"),
+  "[KILL]他要的是「结果」[/KILL]"
+);
+assertEq(
+  "超长引号内容（>12字）不加粗",
+  autoBoldQuotedEmphasis(
+    "用户说「这是一句非常长的引用，超过十二个字应该不被自动加粗处理」"
+  ),
+  "用户说「这是一句非常长的引用，超过十二个字应该不被自动加粗处理」"
+);
+
+// ----------------------------------------------------------------------
+// Test 12 · v0.7.9.5.3 · KILL + sanitize + 引号加粗组合
+// ----------------------------------------------------------------------
+console.log("\nTest 12 · 完整链路组合（sanitize + 引号加粗 → KILL 保留）");
+const fullCase = `⚠️ 当前轮次：第 1 轮
+
+正文段，用户要的是「结果」不是工具。
+
+[KILL]你给的是「工具」，用户要的是「结果」。[/KILL]`;
+const step1 = sanitizeLLMOutput(fullCase);
+const step2 = autoBoldQuotedEmphasis(step1);
+assertContains("污染段被剥", step2, "当前轮次", false);
+assertContains("正文段引号被加粗", step2, "用户要的是**结果**", true);
+assertContains(
+  "KILL 段引号保留原话不被加粗（金句保留原味）",
+  step2,
+  "[KILL]你给的是「工具」，用户要的是「结果」。[/KILL]",
+  true
+);
 
 // ----------------------------------------------------------------------
 console.log("\n=== 结果 ===");

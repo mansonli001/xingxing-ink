@@ -192,6 +192,8 @@ export function Chat({
                 isLatestAssistant={m.id === latestAssistantId}
                 onQuoteReply={handleFollowUp}
                 onSpeakingChange={setIsSpeaking}
+                onPickOption={(letter) => sendMessageWith(letter)}
+                streaming={streaming}
               />
             ))
           )}

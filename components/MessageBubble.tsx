@@ -6,7 +6,9 @@ import { useState, useMemo, useRef } from "react";
 import { AudioPlayer } from "./AudioPlayer";
 import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
-import { sanitizeLLMOutput } from "@/lib/prompts/sanitizer";
+import { sanitizeLLMOutput, autoBoldQuotedEmphasis } from "@/lib/prompts/sanitizer";
+import { KillStamp, extractKillStamp } from "./KillStamp";
+import { OptionButtons, extractOptions } from "./OptionButtons";
 
 // TTS 总开关：默认关闭。配置 NEXT_PUBLIC_TTS_ENABLED=true 才启用语音
 const TTS_ENABLED = process.env.NEXT_PUBLIC_TTS_ENABLED === "true";
@@ -93,6 +95,10 @@ interface MessageBubbleProps {
   onQuoteReply?: (quotedText: string) => void;
   /** 上传播放状态到 Chat：供人像呼吸动效订阅（v0.4） */
   onSpeakingChange?: (speaking: boolean) => void;
+  /** v0.7.9.5.3：点击 ABC 选项按钮时回调（直接当成用户消息发出） */
+  onPickOption?: (letter: string) => void;
+  /** v0.7.9.5.3：当前是否在流式接收中（禁用选项按钮） */
+  streaming?: boolean;
 }
 
 export function MessageBubble({
@@ -100,6 +106,8 @@ export function MessageBubble({
   isLatestAssistant,
   onQuoteReply,
   onSpeakingChange,
+  onPickOption,
+  streaming,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const meta = message.mode ? MODE_META[message.mode] : MODE_META.scathing;
@@ -113,16 +121,38 @@ export function MessageBubble({
     [isUser, message.content]
   );
 
-  // v0.7.9.5：关键词自动高亮（仅 AI 消息）
+  // v0.7.9.5.3：剥出 KILL 标记
+  // 流式中 KILL 标记可能不完整（[KILL]xxx... 还没收到 [/KILL]），这种情况 extractKillStamp 返回 null
+  // → 正文继续走流式渲染，KILL 卡片在 done 之后才出现
+  const { content: contentWithoutKill, kill } = useMemo(() => {
+    if (isUser) return { content: message.content, kill: null as string | null };
+    return extractKillStamp(safeContent);
+  }, [isUser, safeContent, message.content]);
+
+  // v0.7.9.5.3：剥出末段 ABC 选项（仅在 done 之后做，避免流式中段误识别）
+  // 仅当：①AI 消息已 done ②末段能解出 ≥2 个 ABC 选项 才识别
+  // 识别后正文要把末段去掉（避免重复显示）
+  const { contentForRender, options } = useMemo(() => {
+    if (isUser) return { contentForRender: message.content, options: [] as ReturnType<typeof extractOptions> };
+    if (!message.done) return { contentForRender: contentWithoutKill, options: [] as ReturnType<typeof extractOptions> };
+    const paras = contentWithoutKill.split(/\n\n/);
+    if (paras.length === 0) return { contentForRender: contentWithoutKill, options: [] as ReturnType<typeof extractOptions> };
+    const lastPara = paras[paras.length - 1];
+    const opts = extractOptions(lastPara);
+    if (opts.length >= 2) {
+      // 末段是 ABC，从正文剥掉
+      return { contentForRender: paras.slice(0, -1).join("\n\n"), options: opts };
+    }
+    return { contentForRender: contentWithoutKill, options: opts };
+  }, [isUser, contentWithoutKill, message.done, message.content]);
+
+  // v0.7.9.5：关键词自动高亮 + v0.7.9.5.3：引号包裹自动加粗（仅 AI 消息）
   // 把已知竞品名 / 术语 / 数字+% 自动包成 markdown `**` 加粗，复用 .markdown-body strong 的玫瑰金样式。
-  // 边界保护：
-  //   - 若关键词已在 ` ` 反引号包裹里（code）→ 不再加 ** （避免破坏代码）
-  //   - 若关键词已在 ** ** 内 → 跳过（避免重复加粗破坏语法）
-  //   - 用 \b 边界匹配英文，中文用前后非 ** 守卫
   const highlightedContent = useMemo(() => {
-    if (isUser) return safeContent;
-    return autoHighlightKeywords(safeContent);
-  }, [isUser, safeContent]);
+    if (isUser) return contentForRender;
+    // 先关键词白名单加粗，再「xxx」/ "xxx" 自动加粗
+    return autoBoldQuotedEmphasis(autoHighlightKeywords(contentForRender));
+  }, [isUser, contentForRender]);
 
   // v0.7.9.6：段落级渐入（仅 AI · 流式时让段落"一段段出现"模拟辩手节奏）
   // 切分策略：按 `\n\n` 切段，每段独立渲染为 div + 段索引 key
@@ -147,7 +177,11 @@ export function MessageBubble({
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(safeContent);
+      // v0.7.9.5.3：复制时把 KILL 标记还原为「醒醒：xxx」可读形式
+      const copyText = kill
+        ? `${contentWithoutKill}\n\n醒醒：${kill}`
+        : safeContent;
+      await navigator.clipboard.writeText(copyText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -166,7 +200,8 @@ export function MessageBubble({
    * 锚点最多 60 字，超出截断加"…"。
    */
   function handleQuote() {
-    const raw = safeContent.trim();
+    // v0.7.9.5.3：锚点从无 KILL 的正文提取（KILL 句太总结性引用没意义）
+    const raw = contentWithoutKill.trim();
     // 按句号/问号/感叹号切句，保留标点
     const sentences = raw
       .split(/(?<=[。！？?!])\s*/)
@@ -261,10 +296,25 @@ export function MessageBubble({
                 </span>
               </span>
             ) : (
-              <SegmentedMarkdown
-                segments={segments}
-                renderedCountRef={renderedCountRef}
-              />
+              <>
+                <SegmentedMarkdown
+                  segments={segments}
+                  renderedCountRef={renderedCountRef}
+                />
+                {/* v0.7.9.5.3：ABC 选项按钮（仅 done 后 + 末段是 ABC 时渲染） */}
+                {options.length >= 2 ? (
+                  <OptionButtons
+                    options={options}
+                    mode={message.mode || "scathing"}
+                    onPick={onPickOption}
+                    disabled={streaming}
+                  />
+                ) : null}
+                {/* v0.7.9.5.3：醒醒盖章句（KillStamp · 流式中可能未到 [/KILL] 暂不渲染） */}
+                {kill ? (
+                  <KillStamp text={kill} mode={message.mode || "scathing"} />
+                ) : null}
+              </>
             )}
           </div>
           {/* v0.4.2.4：
@@ -275,7 +325,7 @@ export function MessageBubble({
           message.content.length > 0 &&
           (TTS_ENABLED || message.presetAudio) ? (
             <AudioPlayer
-              text={safeContent}
+              text={kill ? `${contentWithoutKill}。醒醒：${kill}` : safeContent}
               mode={message.mode || "casual"}
               autoPlay={false}
               onPlayingChange={onSpeakingChange}

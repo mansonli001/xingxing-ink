@@ -11,6 +11,48 @@
   --xx-purple: #8b3a72;
   --xx-red: #a83244;
   --xx-gold: #d4af7a;
+
+  /* v0.7.9.5：三档主题色变量（默认 = casual 暗夜玫瑰紫，body 上 data-mode 切换覆盖）
+     绑定品牌色系 xx-purple/xx-gold/xx-red，不用专家提的甜美粉紫，避免与现有"暗夜御姐"调性冲突 */
+  --mode-color: #8b3a72;
+  --mode-color-soft: rgba(139, 58, 114, 0.18);
+  --mode-color-strong: rgba(139, 58, 114, 0.55);
+  --mode-glow: 0 0 28px -4px rgba(139, 58, 114, 0.55);
+  --mode-tag-bg: rgba(139, 58, 114, 0.22);
+  --mode-tag-border: rgba(139, 58, 114, 0.55);
+  --mode-tag-fg: #f0d8e8;
+}
+
+/* v0.7.9.5：三档主题色覆盖（data-mode 加在最外层 div 上 · Chat.tsx 第 100 行）
+   - casual：暗夜玫瑰紫 #8b3a72（姐不陪你做梦但也不骂你 · 慵懒紫）
+   - rational：玫瑰金 #d4af7a（手术室质感 · 拆结构）
+   - scathing：暗血红 #a83244（血浆干涸 · 警告意味的极深暗红） */
+[data-mode="casual"] {
+  --mode-color: #8b3a72;
+  --mode-color-soft: rgba(139, 58, 114, 0.18);
+  --mode-color-strong: rgba(139, 58, 114, 0.55);
+  --mode-glow: 0 0 28px -4px rgba(139, 58, 114, 0.55);
+  --mode-tag-bg: rgba(139, 58, 114, 0.22);
+  --mode-tag-border: rgba(139, 58, 114, 0.55);
+  --mode-tag-fg: #f0d8e8;
+}
+[data-mode="rational"] {
+  --mode-color: #d4af7a;
+  --mode-color-soft: rgba(212, 175, 122, 0.16);
+  --mode-color-strong: rgba(212, 175, 122, 0.5);
+  --mode-glow: 0 0 28px -4px rgba(212, 175, 122, 0.5);
+  --mode-tag-bg: rgba(212, 175, 122, 0.18);
+  --mode-tag-border: rgba(212, 175, 122, 0.55);
+  --mode-tag-fg: #f5e3c0;
+}
+[data-mode="scathing"] {
+  --mode-color: #a83244;
+  --mode-color-soft: rgba(168, 50, 68, 0.2);
+  --mode-color-strong: rgba(168, 50, 68, 0.6);
+  --mode-glow: 0 0 36px -4px rgba(168, 50, 68, 0.65);
+  --mode-tag-bg: rgba(168, 50, 68, 0.24);
+  --mode-tag-border: rgba(168, 50, 68, 0.6);
+  --mode-tag-fg: #f5c8d0;
 }
 
 html,
@@ -953,4 +995,170 @@ h3,
     font-size: 10px;
     letter-spacing: 0.01em;
   }
+}
+
+/* ============================================
+ * v0.7.9.5 · 顶部档位 pill 标签（醒目化）
+ *
+ * 把 "醒醒 · 扇巴掌 第 N 轮过招" 拆成两段：
+ *   ① "醒醒" 品牌名（不变，仍走 chat-session-title）
+ *   ② 档位 pill：带主题色背景 + 主题色边框 + 主题色发光（清晰指示当前档）
+ *   ③ 第 N 轮：仍走 chat-round-indicator
+ *
+ * 设计理念：截图里档位字太淡用户看不清当前在哪一档，
+ *           pill 形态 + 主题色让"我现在在扇巴掌档"成为一眼识别。
+ * ============================================ */
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2.5px;
+  border-radius: 999px;
+  background: var(--mode-tag-bg);
+  border: 1px solid var(--mode-tag-border);
+  color: var(--mode-tag-fg);
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  box-shadow: 0 0 14px -4px var(--mode-color-strong);
+  transition: all 0.25s ease;
+}
+.mode-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mode-color);
+  box-shadow: 0 0 6px var(--mode-color);
+}
+@media (max-width: 499px) {
+  .mode-pill {
+    font-size: 11.5px;
+    padding: 1.5px 8px 2px;
+    letter-spacing: 0.06em;
+  }
+  .mode-pill::before {
+    width: 5px;
+    height: 5px;
+  }
+}
+
+/* v0.7.9.5：输入框 focus-within 主题色发光（替代固定金色） */
+.input-mode-focus:focus-within {
+  border-color: var(--mode-color) !important;
+  box-shadow: var(--mode-glow);
+}
+
+/* v0.7.9.5：发送按钮主题色（替代固定金色，让送出按钮跟当前档"有温度"） */
+.send-btn-mode {
+  background: var(--mode-color);
+  color: #14101a;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.send-btn-mode:not(:disabled):hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 14px -2px var(--mode-color-strong);
+}
+.send-btn-mode:not(:disabled):active {
+  transform: scale(0.96);
+}
+/* scathing 档暗血红反差太强 → 字色用米色而非黑底 */
+[data-mode="scathing"] .send-btn-mode {
+  color: #fff5f0;
+}
+[data-mode="rational"] .send-btn-mode {
+  color: #14101a;
+}
+[data-mode="casual"] .send-btn-mode {
+  color: #fff5f8;
+}
+
+/* ============================================
+ * v0.7.9.5 · AI 加载状态人设化（替换原 italic "醒醒正在打字……"）
+ *
+ * 三档差异化文案 + 主题色跳点动画
+ *   - casual:   姐正在嫌弃你的想法……
+ *   - rational: 姐正在核算你的逻辑……
+ *   - scathing: 姐正在翻你的旧账……
+ *
+ * 三个跳点用主题色，节奏：jump 0.6s 错位 200ms/400ms
+ * ============================================ */
+.loading-persona {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "LXGW WenKai Screen", "LXGW WenKai", "Noto Serif SC", serif;
+  color: var(--mode-color);
+  font-style: italic;
+  letter-spacing: 0.04em;
+  font-size: 15px;
+  opacity: 0.85;
+}
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1em;
+}
+.loading-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mode-color);
+  box-shadow: 0 0 6px var(--mode-color-strong);
+  animation: loading-jump 0.7s infinite alternate ease-in-out;
+}
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes loading-jump {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-5px);
+    opacity: 0.5;
+  }
+}
+.loading-text {
+  display: inline-block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots span {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* ============================================
+ * v0.7.9.5 · AI 气泡 主题色边框 + 关键词高亮发光
+ *
+ * - 气泡边框：弱主题色，hover 时强一点（不抢戏）
+ * - 关键词加粗（strong）：复用现有玫瑰金色，加一点点主题色发光让"出刀点"被注意到
+ * ============================================ */
+.ai-bubble {
+  border-color: var(--mode-tag-border);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.25),
+    0 0 18px -8px var(--mode-color-strong);
+  transition: box-shadow 0.3s ease;
+}
+.ai-bubble:hover {
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.25),
+    0 0 22px -6px var(--mode-color-strong);
+}
+
+/* 关键词高亮：在原有 .markdown-body strong 玫瑰金基础上，加主题色发光让出刀点更显眼
+   注意 .markdown-body strong 已经是 #e8b4b8 玫瑰金，这里只追加阴影，不覆盖颜色 */
+.markdown-body strong {
+  text-shadow: 0 0 6px var(--mode-color-soft);
 }

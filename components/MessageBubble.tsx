@@ -11,6 +11,64 @@ import { sanitizeLLMOutput } from "@/lib/prompts/sanitizer";
 // TTS 总开关：默认关闭。配置 NEXT_PUBLIC_TTS_ENABLED=true 才启用语音
 const TTS_ENABLED = process.env.NEXT_PUBLIC_TTS_ENABLED === "true";
 
+/**
+ * v0.7.9.5：关键词自动高亮白名单
+ *
+ * 设计原则：
+ *   - 只覆盖明显的"行业符号"——竞品名 / 增长术语 / 钱数百分比
+ *   - 不覆盖通用词（"产品" "用户" "增长"）避免高亮过度变成 PPT 风
+ *   - 中文/英文/数字混合都覆盖
+ */
+const KEYWORD_PATTERNS: { pattern: RegExp; replace: string }[] = [
+  // 1. 主流竞品名（精确字符串，区分大小写敏感）
+  {
+    pattern:
+      /\b(Character\.AI|Replika|GPT-4o|GPT-4|GPT-5|ChatGPT|Claude|Gemini|Sora|DeepSeek|Notion|Canva|Figma|Midjourney|Stable Diffusion|Boss直聘|拉勾|前程无忧|脉脉|小红书|抖音|微信|公众号|知乎|B站|淘宝|京东|拼多多|美团|饿了么|滴滴|微博|快手|TikTok|Instagram|YouTube|Twitter|Reddit|LinkedIn|WPS|Office)\b/g,
+    replace: "**$1**",
+  },
+  // 2. 增长 / 商业术语（中英文）
+  {
+    pattern:
+      /\b(CAC|LTV|PMF|DAU|MAU|GMV|MRR|ARR|ARPU|CTR|CVR|ROI|ROAS|NPS|MVP|PRD|JTBD|BMC|SaaS|Unit Economics|cohort)\b/g,
+    replace: "**$1**",
+  },
+  // 3. 数字 + 百分比 / 倍数（如 80%、3.5x、10倍）
+  {
+    pattern: /(\d+(?:\.\d+)?)(%|×|倍|x)/g,
+    replace: "**$1$2**",
+  },
+  // 4. 数字 + 万/亿/k/m （金额规模）
+  {
+    pattern: /(\d+(?:\.\d+)?)(万|亿|千万|百万|k元|w元|K|M|w)\b/g,
+    replace: "**$1$2**",
+  },
+];
+
+/**
+ * 自动加粗关键词（仅作用于未在 ** 或 ` 内的纯文本片段）
+ *
+ * 实现：先按 ** 和 ` 切分成 [文本, 已加粗段, 文本, 代码段...] 数组，
+ *      只对"非加粗非代码"片段做关键词替换，再拼回。
+ */
+function autoHighlightKeywords(text: string): string {
+  if (!text) return text;
+  // 用一个分割正则同时切 `xxx`（行内代码）、```xxx```（代码块）、**xxx**（已加粗）
+  // 切完之后偶数 index 是普通文本可以加粗，奇数 index 是已包裹片段保留原样
+  const parts = text.split(
+    /(```[\s\S]*?```|`[^`\n]*`|\*\*[^*\n]+\*\*)/g
+  );
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // 已包裹片段原样
+      let processed = part;
+      for (const { pattern, replace } of KEYWORD_PATTERNS) {
+        processed = processed.replace(pattern, replace);
+      }
+      return processed;
+    })
+    .join("");
+}
+
 export interface ChatMessageItem {
   id: string;
   role: "user" | "assistant";
@@ -55,10 +113,21 @@ export function MessageBubble({
     [isUser, message.content]
   );
 
+  // v0.7.9.5：关键词自动高亮（仅 AI 消息）
+  // 把已知竞品名 / 术语 / 数字+% 自动包成 markdown `**` 加粗，复用 .markdown-body strong 的玫瑰金样式。
+  // 边界保护：
+  //   - 若关键词已在 ` ` 反引号包裹里（code）→ 不再加 ** （避免破坏代码）
+  //   - 若关键词已在 ** ** 内 → 跳过（避免重复加粗破坏语法）
+  //   - 用 \b 边界匹配英文，中文用前后非 ** 守卫
+  const highlightedContent = useMemo(() => {
+    if (isUser) return safeContent;
+    return autoHighlightKeywords(safeContent);
+  }, [isUser, safeContent]);
+
   if (isUser) {
     return (
       <div className="flex justify-end fade-in">
-        <div className="max-w-[min(72%,520px)] rounded-2xl rounded-tr-sm border border-xx-border bg-xx-bg-2 px-4 py-2.5 text-sm text-xx-text whitespace-pre-wrap leading-relaxed">
+        <div className="max-w-[min(72%,520px)] rounded-[18px] rounded-tr-[6px] border border-xx-border/60 bg-xx-bg-2/70 px-4 py-2.5 text-sm text-xx-text/90 whitespace-pre-wrap leading-relaxed">
           {message.content}
         </div>
       </div>
@@ -151,8 +220,7 @@ export function MessageBubble({
         </div>
         <div
           className={[
-            "rounded-2xl rounded-tl-sm border bg-xx-bg-2/92 backdrop-blur-sm px-4 py-3",
-            "border-xx-border",
+            "ai-bubble rounded-[20px] rounded-tl-[6px] border bg-xx-bg-2/92 backdrop-blur-sm px-5 py-4",
           ].join(" ")}
         >
           <div
@@ -167,10 +235,23 @@ export function MessageBubble({
             ].join(" ")}
           >
             {message.content.length === 0 && !message.done ? (
-              <span className="italic">醒醒正在打字……</span>
+              <span className="loading-persona" data-mode={message.mode || "scathing"}>
+                <span className="loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+                <span className="loading-text">
+                  {message.mode === "casual"
+                    ? "姐正在嫌弃你的想法……"
+                    : message.mode === "rational"
+                    ? "姐正在核算你的逻辑……"
+                    : "姐正在翻你的旧账……"}
+                </span>
+              </span>
             ) : (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {safeContent}
+                {highlightedContent}
               </ReactMarkdown>
             )}
           </div>

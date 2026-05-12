@@ -109,12 +109,16 @@ export function Chat({
       {/* 顶部：对话中显示"杠精风格"徽章（产品名 + 当前人格 + 轮次） */}
       {locked ? (
         <div className="relative z-10 px-4 sm:px-6 pt-3 pb-2 flex items-center justify-between border-b border-xx-border bg-xx-bg/85 backdrop-blur-sm">
-          <div className="flex items-baseline gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="chat-session-title">
-              醒醒 · <span className="text-white">{currentMeta.label}</span>
+              醒醒
             </h2>
+            {/* v0.7.9.5：档位 pill 醒目化（带主题色背景 + 圆点 + 发光），让用户一眼识别当前档 */}
+            <span className="mode-pill" aria-label={`当前档位：${currentMeta.label}`}>
+              {currentMeta.label}
+            </span>
             <span className="chat-round-indicator">
-              第 <span className="text-xx-gold font-medium">{turnCount}</span> 轮过招
+              第 <span className="font-medium" style={{ color: "var(--mode-color)" }}>{turnCount}</span> 轮过招
             </span>
           </div>
           <button
@@ -160,7 +164,7 @@ export function Chat({
       {/* 消息列表 */}
       <div
         ref={listRef}
-        className="relative z-0 flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-4"
+        className="relative z-0 flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6"
       >
         {/* 对话安全区：
             - 空状态（无消息）：居中，与右侧人物形成迎宾对称
@@ -195,7 +199,7 @@ export function Chat({
           className="input-safe-zone w-full"
           data-has-messages={messages.length > 0 ? "true" : "false"}
         >
-          <div className="flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 focus-within:border-xx-gold transition-colors">
+          <div className="input-mode-focus flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 transition-colors">
             <MicInput
               disabled={streaming}
               onTranscript={(text) => {
@@ -215,7 +219,11 @@ export function Chat({
               rows={2}
               placeholder={
                 turnCount > 0
-                  ? "继续聊 · 或点 AI 消息下的「追问这一段」一键深挖"
+                  ? mode === "scathing"
+                    ? "还没被扇够？继续。"
+                    : mode === "rational"
+                    ? "别绕弯子，说重点。"
+                    : "想清楚了再回我。"
                   : mode === "scathing"
                   ? "把你最得意的那个 idea 丢过来。我专挑你没敢看的那一页。"
                   : mode === "rational"
@@ -237,7 +245,7 @@ export function Chat({
                 "shrink-0 rounded-md px-3.5 py-1.5 text-sm font-medium transition-all",
                 streaming || !input.trim()
                   ? "bg-xx-border text-xx-text-dim cursor-not-allowed"
-                  : "bg-xx-gold text-xx-bg hover:brightness-110 active:scale-95",
+                  : "send-btn-mode",
               ].join(" ")}
             >
               {streaming ? "醒醒说话中…" : "送上去"}

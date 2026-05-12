@@ -8,6 +8,93 @@
 
 ---
 
+## [v0.7.9.5] - 2026-05-12 — 「UX 视觉地基（三档主题色 + 气泡重构 + 加载人设化 + 关键词高亮）」
+
+> v0.7.9.5.0 紧急修复（输出污染双层兜底）已于 commit 35b40af 上线，本节追加 v0.7.9.5.1/5.2 两个子项。
+> 用户感知目标：「界面变好看了」「姐姐有温度了」。
+
+### 三档主题色锁死（v0.7.9.5.1）
+
+新增 `--mode-color` / `--mode-glow` / `--mode-tag-bg` 等 CSS Variables，跟随 `[data-mode]` 切换：
+
+| 档位 | 主题色 | 调性 |
+|---|---|---|
+| **casual** | `#8b3a72` 暗夜玫瑰紫 | 慵懒紫 · 姐不陪你做梦但也不骂你 |
+| **rational** | `#d4af7a` 玫瑰金 | 手术室质感 · 拆结构 |
+| **scathing** | `#a83244` 暗血红 | 血浆干涸的色 · 警告意味的极深暗红（绝不亮红）|
+
+**保留品牌色系**：未采用专家提的 `#D170E8/#64748B/#991B1B`（专家提的粉紫太甜跟"暗夜御姐"调性冲突），改为锁定现有 xx-purple/xx-gold/xx-red 三色作为主题色变量。
+
+### 顶部档位标签 pill 醒目化（v0.7.9.5.1）
+
+修复用户截图反馈"档位字太淡看不清当前在哪一档"——
+顶部从 `醒醒 · 扇巴掌 第 N 轮过招` 拆为：
+- `醒醒` 品牌名（chat-session-title）
+- 档位 pill：圆角 + 主题色背景 + 主题色边框 + 主题色发光 + 圆点（`mode-pill` 新样式）
+- `第 N 轮`：N 用主题色而非固定金色
+
+### 输入区主题色化（v0.7.9.5.1）
+
+- focus-within 边框：`xx-gold` → `var(--mode-color)`（`.input-mode-focus` 新样式）
+- 送出按钮：固定金色 → 主题色（`.send-btn-mode` 新样式，scathing 暗红配米色字、其他配深底字以保对比度）
+
+### 加载状态人设化（v0.7.9.5.2 · 替换原"醒醒正在打字……"）
+
+三档差异化文案 + 主题色跳点动画：
+- casual: `姐正在嫌弃你的想法……`
+- rational: `姐正在核算你的逻辑……`
+- scathing: `姐正在翻你的旧账……`
+
+3 个跳点 jump 动画错位 200ms/400ms，主题色 + 主题色发光，`.loading-persona` / `.loading-dots` 新样式。
+
+### 关键词自动高亮（v0.7.9.5.2）
+
+新增 `autoHighlightKeywords()` 工具，按白名单把竞品名/术语/数字百分比自动包成 markdown `**`，复用 `.markdown-body strong` 玫瑰金 + 追加主题色 text-shadow 发光：
+
+- **竞品名**：Character.AI / Replika / GPT-4o / Sora / Boss直聘 / 小红书 / 抖音 / 微信 / Notion / Canva 等 ~40 个
+- **术语**：CAC / LTV / PMF / DAU / MAU / GMV / MRR / ARR / ROI / NPS / MVP / PRD / JTBD / SaaS 等
+- **数字**：百分比（80%）、倍数（3x / 10倍）、规模（500万 / 1.2亿）
+
+**边界保护**：用切分重组算法保护已包裹片段——
+- 已在 ` ` 反引号里的不动（不破坏代码）
+- 已在 `**` 内的不动（避免重复加粗破坏语法）
+- 已在 ``` ``` 代码块里的不动
+
+### 聊天气泡视觉重构（v0.7.9.5.2）
+
+| 元素 | 原 | 新 |
+|---|---|---|
+| AI 气泡圆角 | `rounded-2xl rounded-tl-sm` | `rounded-[20px] rounded-tl-[6px]`（更圆 + 小尾巴） |
+| AI 气泡 padding | `px-4 py-3` | `px-5 py-4`（更舒展） |
+| AI 气泡边框 | `border-xx-border` 固定灰 | `var(--mode-tag-border)` 主题色弱描边 |
+| AI 气泡发光 | 无 | `0 0 18px -8px var(--mode-color-strong)`（主题色微发光，hover 加强） |
+| 用户气泡 | `border-xx-border bg-xx-bg-2` | `border-xx-border/60 bg-xx-bg-2/70`（弱化对比，让醒醒气泡视觉权重 > 用户）|
+| 消息间距 | `space-y-4` (16px) | `space-y-6` (24px) |
+
+### 动态 placeholder（v0.7.9.5.2）
+
+输入框 placeholder 跟随档位（首轮和续聊都生效）：
+
+| 档位 | 续聊 placeholder（专家2）| 首轮 placeholder（保留现有）|
+|---|---|---|
+| casual | `想清楚了再回我。` | `又有新想法？说说看…（上次那个呢）` |
+| rational | `别绕弯子，说重点。` | `说。我只问一句——谁付钱，付多少，付几次。` |
+| scathing | `还没被扇够？继续。` | `把你最得意的那个 idea 丢过来。我专挑你没敢看的那一页。` |
+
+### Changed
+
+- `app/globals.css` · 新增三档主题色 CSS Variables、`.mode-pill` 醒目化标签、`.input-mode-focus` 主题色聚焦、`.send-btn-mode` 主题色按钮、`.loading-persona`/`.loading-dots` 加载状态、`.ai-bubble` 主题色边框发光、`.markdown-body strong` 关键词主题色发光
+- `components/Chat.tsx` · 顶部档位 pill 改造、消息列表间距 +50%、输入区按钮+边框主题色化、动态 placeholder 三档差异化（首轮+续聊）
+- `components/MessageBubble.tsx` · 加 `autoHighlightKeywords()` 关键词预处理、AI 气泡圆角/padding/主题色边框、用户气泡弱化、加载状态三档人设化文案
+
+### 不在本批范围（推迟到后续批次）
+
+- ⏸ 32px 醒醒头像（现有"圆点 + 醒醒 · 档位"上行已够身份识别，避免破坏响应式布局，推迟）
+- ⏭ v0.7.9.6 段落渐入 / 重入 toast / 抽屉框架 / 12 问矩阵进度
+- ⏭ v0.7.9.7 持久化 schema v2 + 切档弹窗 + 移动端键盘适配
+
+---
+
 ## [v0.7.9.5.0] - 2026-05-12 — 「🚨 LLM 输出污染紧急修复 · 双层兜底」
 
 > **Hotfix · 真机暴露 scathing 第 1 轮把内部 system prompt 状态原样 echo 到对用户回复**

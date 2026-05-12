@@ -20,6 +20,12 @@ interface KillStampProps {
 /**
  * 提取 KILL 句的工具函数（导出供 MessageBubble 使用）
  *
+ * v0.7.9.5.3.1 容错升级：
+ *   - 标准格式 [KILL]xxx[/KILL] → 直接提取
+ *   - LLM 漏前标记：xxx[/KILL] → 兜底匹配（取末段）
+ *   - LLM 漏后标记：[KILL]xxx → 兜底匹配（取到段尾）
+ *   - 全漏：返回 null（KillStamp 不渲染，回退到普通 markdown）
+ *
  * @param text 完整 LLM 输出
  * @returns { content: 剥掉 KILL 段的正文, kill: KILL 句内容（无标记） }
  */
@@ -29,17 +35,42 @@ export function extractKillStamp(text: string): {
 } {
   if (!text) return { content: text, kill: null };
 
-  // 匹配最后一个 [KILL]xxx[/KILL]（贪婪）
-  const match = text.match(/\[KILL\]([\s\S]*?)\[\/KILL\]/);
-  if (!match) return { content: text, kill: null };
+  // 1. 标准格式：[KILL]xxx[/KILL]
+  const standard = text.match(/\[KILL\]([\s\S]*?)\[\/KILL\]/);
+  if (standard) {
+    const kill = standard[1].trim();
+    if (kill) {
+      const content = text
+        .replace(/\n*\[KILL\][\s\S]*?\[\/KILL\]\n*/, "")
+        .trim();
+      return { content, kill };
+    }
+  }
 
-  const kill = match[1].trim();
-  if (!kill) return { content: text, kill: null };
+  // 2. LLM 漏 [KILL] 开头但有 [/KILL] 结尾：取末段或结尾标记前一段当 KILL
+  //    模式：xxx\n\nyyy[/KILL]  → KILL = yyy
+  const onlyEnd = text.match(/(?:^|\n\n)([^\n]+?)\[\/KILL\]/);
+  if (onlyEnd) {
+    const kill = onlyEnd[1].trim();
+    if (kill && kill.length >= 8 && kill.length <= 80) {
+      const content = text
+        .replace(/\n*[^\n]*?\[\/KILL\]\n*/, "")
+        .trim();
+      return { content, kill };
+    }
+  }
 
-  // 从原文移除 KILL 标记段（包含可能的前后空白行）
-  const content = text.replace(/\n*\[KILL\][\s\S]*?\[\/KILL\]\n*/, "").trim();
+  // 3. LLM 漏 [/KILL] 结尾但有 [KILL] 开头：取标记后所有内容到段尾当 KILL
+  const onlyStart = text.match(/\[KILL\]([\s\S]+?)(?:\n\n|$)/);
+  if (onlyStart) {
+    const kill = onlyStart[1].trim();
+    if (kill && kill.length >= 8 && kill.length <= 80) {
+      const content = text.replace(/\n*\[KILL\][\s\S]+?(?=\n\n|$)/, "").trim();
+      return { content, kill };
+    }
+  }
 
-  return { content, kill };
+  return { content: text, kill: null };
 }
 
 export function KillStamp({ text, mode = "scathing" }: KillStampProps) {

@@ -123,12 +123,25 @@ export function sanitizeLLMOutput(text: string): string {
   const cleaned = paragraphs
     .filter((p) => {
       // v0.7.9.5.3：KILL 标记段绝不剥（白名单最高优先级，防止误伤）
-      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return true;
+      // v0.7.9.5.3.1：兼容 LLM 漏标的半标记（[KILL]xxx 或 xxx[/KILL]）
+      if (
+        /\[KILL\][\s\S]*?\[\/KILL\]/.test(p) ||
+        /\[KILL\]/.test(p) ||
+        /\[\/KILL\]/.test(p)
+      ) {
+        return true;
+      }
       return !shouldStripParagraph(p);
     })
     .map((p) => {
-      // 段内行首 emoji 剥离（保留 KILL 段不动）
-      if (/\[KILL\][\s\S]*?\[\/KILL\]/.test(p)) return p;
+      // 段内行首 emoji 剥离（保留 KILL 段不动，含半标记）
+      if (
+        /\[KILL\][\s\S]*?\[\/KILL\]/.test(p) ||
+        /\[KILL\]/.test(p) ||
+        /\[\/KILL\]/.test(p)
+      ) {
+        return p;
+      }
       return p.split("\n").map(stripLineHeadEmoji).join("\n");
     });
 

@@ -8,6 +8,83 @@
 
 ---
 
+## [v0.7.9.4.1] - 2026-05-12 — 「v0.7.9.4 注入链路修复 · maxTokens 上调」
+
+> **Hotfix · 走查发现 v0.7.9.4 改的 mind 文件根本没生效**
+> 走查 `lib/prompts/index.ts` 注入链路时定位 2 个高危问题，立刻修复。
+
+### 走查发现的 2 个高危问题
+
+#### 问题 1 · v0.7.9.4 升级节注入链路缺失
+
+`arsenal_addon/{casual,rational,scathing}.md` 的 v0.7.9.4 升级节包含**第 1-2 轮翻转节奏**等关键约束，
+但旧链路只在 `userTurnCount >= 3` 才注入，且 `addonQ` 存在时根本不会读到 `addonFull`。
+→ **v0.7.9.4 改的"翻转节奏 / 不抛术语 / 不给 ABC"等第 1-2 轮规则形同虚设**。
+
+`_response_protocol.md` 顶部的 7 条横切总则只在用户说"不知道/没想过"等触发词时注入，
+正常对话压根触发不到。
+→ **三档共同抬杠基线 / 翻转 ≠ 顾问引导 等总则也基本没生效**。
+
+#### 问题 2 · maxTokens 偏低导致后段被截断
+
+| 档 | 旧 | 风险 |
+|---|---|---|
+| casual | 800 | 50% 降维打击案例易截断 |
+| rational | 1200 | 字数下限 350 + 1-3 术语转译 + ABC 顶到边界 |
+| scathing | 900 | 30/50/20 配比 + 第 3 轮温柔收尾会被切掉，末段崩塌 |
+
+这是用户反馈"多轮质量衰减"的硬件原因之一——不是 DS 模型有幻觉，是被 max_tokens 切掉了尾部。
+
+### 修复方案
+
+#### Fix 1+2+3 · 注入链路重建（`lib/prompts/methodology_loader.ts` + `index.ts`）
+
+新增 2 个切片 loader：
+- `loadV094Persona(mode)`：从 `arsenal_addon/{mode}.md` 切出 `## v0.7.9.4 升级` 之后的全部内容
+- `loadV094Protocol()`：从 `_response_protocol.md` 切出 `## v0.7.9.4 总则` 到 `## 决策树` 之间的内容
+
+在 `buildSystemPrompt` 的 step 3.5 位置（dynamic 之后、arsenal 之前）**永远注入**这两层，
+**不再依赖 userTurnCount >= 3 或 trigger 词触发**。
+
+代价：每轮 system prompt 增加 ~2K tokens（v094Persona ~1.5K + v094Protocol ~600）— 完全可控。
+
+#### Fix 4 · maxTokens 上调（`lib/prompts/index.ts` MODES）
+
+| 档 | 旧 | 新 | 增幅 |
+|---|---|---|---|
+| casual | 800 | **1200** | +50% |
+| rational | 1200 | **1600** | +33% |
+| scathing | 900 | **1500** | +67% |
+
+DS-chat 原生支持 8K 输出，1500 完全没压力，反而是旧值偏低导致的尾部截断才是质量衰减真凶。
+
+### 验证
+
+新增 `scripts/_v094_health.mjs` 健康检查脚本，验证两个切片 loader 正确性：
+- ✅ casual 升级节 2068 chars · 5/5 关键词命中
+- ✅ rational 升级节 2573 chars · 4/4 关键词命中
+- ✅ scathing 升级节 3078 chars · 7/7 关键词命中
+- ✅ protocol 总则节 1583 chars · 干净不串决策树 · 7/7 关键词命中
+- **总计 24 PASS / 0 FAIL**
+
+### Changed
+
+- `lib/prompts/methodology_loader.ts` · 新增 `loadV094Persona` + `loadV094Protocol`
+- `lib/prompts/index.ts` · 注入链路加 step 3.5 + MODES 三档 maxTokens 上调
+- `scripts/_v094_health.mjs` · 新增切片健康检查
+
+### Build
+
+- TypeScript: 0 错误
+- Lint: 0 警告
+- next build: ✅ 通过
+
+### 0 mind repo 改动
+
+本次 hotfix 全部在主 repo · 不动 mind repo · 不改 v0.7.9.4 内容。
+
+---
+
 ## [v0.7.9.4] - 2026-05-12 — 「三档人格升级 · 扇巴掌带干货 · 三视角分工」
 
 > **Patch · 三轮外部专家深度评审 + 用户精准拍板**

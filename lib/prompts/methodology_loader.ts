@@ -129,6 +129,53 @@ export function loadArsenalAddon(mode: ModeId): string {
 }
 
 /**
+ * v0.7.9.4 · 加载档位"v0.7.9.4 升级节"（视角分工 + 配比硬规则 + 翻转节奏）
+ *
+ * 这一节是**横切规则**（含第 1-2 轮翻转节奏 / 术语转译公式 / 三红线 / 温柔收尾时机），
+ * 必须**从第 1 轮就注入**，否则 v0.7.9.4 改造的关键内容形同虚设。
+ *
+ * 提取策略：从 `arsenal_addon/{mode}.md` 中切出 "## v0.7.9.4 升级" 之后的全部内容。
+ * 这样既保留 Q1-Q12 弹药仅在第 3+ 轮通过 loadArsenalAddon 注入，
+ * 又能让升级节横切规则永远在线。
+ *
+ * 缺失或 v0.7.9.4 节不存在时返回空字符串（安全降级）。
+ */
+export function loadV094Persona(mode: ModeId): string {
+  const full = loadPrivate(`arsenal_addon/${mode}.md`);
+  if (!full) return "";
+  const marker = "## v0.7.9.4 升级";
+  const idx = full.indexOf(marker);
+  if (idx < 0) return "";
+  return full.slice(idx).trim();
+}
+
+/**
+ * v0.7.9.4 · 加载 response_protocol 顶部"7 条横切总则"
+ *
+ * 这一节是**三档共同抬杠基线**（姐姐抬杠 / 翻转节奏 / 翻转 ≠ 顾问引导 /
+ * 术语转译 / 三红线 / ABC 时机 / 温柔收尾），必须**从第 1 轮就注入**，
+ * 不能藏在"答不出来 SOP 触发逻辑"里——大部分用户根本不会触发那些 trigger 词。
+ *
+ * 提取策略：从 `_methodology/_response_protocol.md` 切出
+ * "## v0.7.9.4 总则" 到 "## 决策树" 之间的内容（仅总则节，不带原 SOP）。
+ * 原 SOP（决策树及以下）仍由 loadResponseProtocol 在 trigger 命中时注入。
+ *
+ * 缺失或节区找不到时返回空字符串（安全降级）。
+ */
+export function loadV094Protocol(): string {
+  const full = loadPrivate("_methodology/_response_protocol.md");
+  if (!full) return "";
+  const startMarker = "## v0.7.9.4 总则";
+  const endMarker = "## 决策树";
+  const startIdx = full.indexOf(startMarker);
+  if (startIdx < 0) return "";
+  const endIdx = full.indexOf(endMarker, startIdx);
+  // 截取到决策树之前；找不到结束标记就截到文末
+  const slice = endIdx > startIdx ? full.slice(startIdx, endIdx) : full.slice(startIdx);
+  return slice.trim();
+}
+
+/**
  * 加载单轮回复结构铁律（70/20/10）
  *
  * 文件：`dynamic/_response_structure.md`

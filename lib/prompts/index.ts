@@ -25,6 +25,8 @@ import {
   loadResponseProtocol,
   loadArsenalAddon,
   loadResponseStructure,
+  loadV094Persona,
+  loadV094Protocol,
 } from "./methodology_loader";
 import { pickCurrentQ } from "./q_picker";
 
@@ -48,7 +50,8 @@ export const MODES: Record<ModeId, WakeMode> = {
     description: "温和直率，留情面不留幻觉。适合想法还没成型、需要有人帮你捋一捋的时刻。",
     attackIntensity: [0.3, 0.5],
     temperature: 0.8,
-    maxTokens: 800,
+    // v0.7.9.4.1 上调：50% 降维打击需要画面感案例 + 第3轮起术语转译，800 易截断
+    maxTokens: 1200,
   },
   rational: {
     id: "rational",
@@ -57,7 +60,8 @@ export const MODES: Record<ModeId, WakeMode> = {
     description: "理性分析，逻辑犀利。适合已经有完整想法、需要被严肃审视的场景。",
     attackIntensity: [0.6, 0.8],
     temperature: 0.5,
-    maxTokens: 1200,
+    // v0.7.9.4.1 上调：字数下限 350 + 1-3 术语转译 + ABC，1200 易顶到边界
+    maxTokens: 1600,
   },
   scathing: {
     id: "scathing",
@@ -66,7 +70,8 @@ export const MODES: Record<ModeId, WakeMode> = {
     description: "毒舌全开，御姐爆裂。适合你已经自我感动、需要被狠狠打醒的时刻。",
     attackIntensity: [0.9, 1.2],
     temperature: 0.9,
-    maxTokens: 900,
+    // v0.7.9.4.1 上调：30/50/20 配比 + 第3轮温柔收尾，900 会被截断导致末段崩塌
+    maxTokens: 1500,
   },
 };
 
@@ -201,6 +206,25 @@ export function buildSystemPrompt(
   // 3. Dynamic 轮次片段
   parts.push(loadDynamic(userTurnCount));
 
+  // ====================================================================
+  // 3.5 v0.7.9.4 升级节 + 横切总则（永远注入 · 第 1 轮起就要在线）
+  //
+  // 修复 v0.7.9.4 上线后的链路缺失问题：
+  //   - 旧版 arsenal_addon/{mode}.md 只在 userTurnCount >= 3 时注入，
+  //     而 v0.7.9.4 升级节里的"前 2 轮不抛术语 / 翻转节奏"规则
+  //     必须从第 1 轮起就让 LLM 看到，否则关键约束形同虚设。
+  //   - 旧版 _response_protocol.md 只在用户说"不知道/没想过"等触发词时注入，
+  //     7 条横切总则（姐姐抬杠 / 翻转 ≠ 顾问引导 / 术语转译 / 三红线 等）
+  //     大部分对话根本触发不到，必须独立提取为永远注入。
+  //
+  // 提取策略：从原文件切出特定节区（不复制内容，loader 文件级缓存）。
+  // 大小：v094Persona ~1.5K tokens / v094Protocol ~600 tokens，开销可控。
+  // ====================================================================
+  const v094Persona = loadV094Persona(mode);
+  if (v094Persona) parts.push(v094Persona);
+  const v094Protocol = loadV094Protocol();
+  if (v094Protocol) parts.push(v094Protocol);
+
   // 4. Arsenal 命中（按场景抽 2 条，无命中就省）
   const arsenalContext = `${userMessage}\n${historySummary}`;
   const arsenal = pickArsenal(arsenalContext, 2);
@@ -248,11 +272,17 @@ export function buildSystemPrompt(
     if (qFile) parts.push(qFile);
 
     // 4.4 档位特色加密弹药（在通用基础上加层）
+    //
+    // v0.7.9.4.1 修复：v0.7.9.4 升级节已通过 loadV094Persona 在 3.5 永远注入，
+    // 此处只追加 Q1-Q12 单题加密弹药；缺失时 fallback 到全量 addonFull
+    // 也不会与升级节重复（因为升级节是切片不是全量）。
     const addonQ = loadArsenalAddonQ(mode, pick.primaryQ);
     if (addonQ) {
       parts.push(addonQ);
     } else {
       // Fallback：单题加密缺失 → 退回到全量档位 arsenal_addon（v0.7.8.2 行为）
+      // 注意：addonFull 包含完整 Q1-Q12 + v0.7.9.4 升级节，
+      // 升级节会和 v094Persona 重复一次，但 LLM 对重复约束容忍度高，不影响质量。
       const addonFull = loadArsenalAddon(mode);
       if (addonFull) parts.push(addonFull);
     }

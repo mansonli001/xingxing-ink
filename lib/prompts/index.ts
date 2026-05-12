@@ -128,9 +128,39 @@ function loadDynamic(userTurnCount: number): string {
   return loadFile("dynamic/turn_6_plus.md");
 }
 
-function loadFinalReminder(): string {
+function loadFinalReminder(mode: ModeId, userTurnCount: number): string {
+  // v0.7.9.4.2 翻转铁律覆盖：前 2 轮 scathing/rational 档不强制 ABC
+  //
+  // 原因：v0.7.9.4 升级节规定"前 2 轮用反问拉用户进数字语境，不抛 ABC"，
+  // 但原 final_reminder 一刀切写"末尾必有编号 forced choice"，权重高于升级节，
+  // 导致 scathing/rational 第 1 轮仍被压着给 ABC（真机走查验证失守）。
+  //
+  // casual 档第 1 轮本来就允许给 ABC（casual 升级节 15% ABC 是常规配比），不豁免。
+  const isEarlyTurn = userTurnCount <= 2;
+  const shouldWaiveABC = isEarlyTurn && (mode === "scathing" || mode === "rational");
+
+  const rule3 = shouldWaiveABC
+    ? [
+        `3. **前 2 轮翻转铁律（v0.7.9.4 · 当前是第 ${userTurnCount} 轮 · ${mode} 档）**——`,
+        "   - ❌ **本轮严禁给 A/B/C 编号选项**（这是 v0.7.9.4 升级节的核心铁律）",
+        "   - ❌ 严禁给\"路径建议 / 温柔收尾 / 我给你指两条路\"这种结论式收束",
+        "   - ✅ 必须以**反问拉用户进数字 / 事实语境**收尾（\"你这 X 是几年攒的？\"\"你 N 粉里几个留过手机号？\"）",
+        "   - ✅ 反问的是**数字 / 事实 / 行动 / 名单**，绝不是\"感受 / 体验 / 情绪\"（后者是顾问引导 · 禁止）",
+        "   - ✅ 可以抛 1 个**行业真相数字**作为预防针，但后面必须跟反问",
+        "   - 这条铁律优先级 > 70/20/10 结构铁律的 10% ABC 段 · 本轮 10% ABC 段改为\"10% 刀锋追问\"",
+      ].join("\n")
+    : [
+        "3. **末尾必有编号 forced choice**——",
+        "   - 格式必须是 `A. xxx` / `B. xxx` / `C. xxx` 带字母编号",
+        "   - ❌「说吧，你卡在哪？」这种开放问句不算",
+        "   - ❌「要做 X 还是 Y」这种口头二选一也不算——**必须有明显的 A/B/C 视觉编号**",
+        "   - 数一数：我末尾有 ≥ 2 个 A/B/C 编号选项吗？没有就加到够",
+      ].join("\n");
+
   return [
-    "## ⛔ 最终提醒（回复前自检 · v0.7.8.1 强化版）",
+    "## ⛔ 最终提醒（回复前自检 · v0.7.9.4.2 升级版 · 轮次感知）",
+    "",
+    `**当前轮次：第 ${userTurnCount} 轮 · ${mode} 档**`,
     "",
     "开口前，心里过一遍这 7 条，任何一条不过关就回炉重改：",
     "",
@@ -145,14 +175,12 @@ function loadFinalReminder(): string {
     "2. **70/20/10 篇幅铁律**——",
     "   - 70% 是大段 diss（戳穿 / 举反例 / 现实碾压 / 带真实竞品名和数字）",
     "   - 20% 是追问（**只问 1 把刀**，措辞毒蛇人话）",
-    "   - 10% 是 forced choice（2-3 个 A/B/C **编号**选项，让用户必选一个）",
+    shouldWaiveABC
+      ? "   - **10% 本轮改为\"刀锋追问\"**（不是 ABC）—— 指向数字 / 事实（见下方铁律 3）"
+      : "   - 10% 是 forced choice（2-3 个 A/B/C **编号**选项，让用户必选一个）",
     "   - 不是清单列问题，是自然叙述 diss 为主体",
     "",
-    "3. **末尾必有编号 forced choice**——",
-    "   - 格式必须是 `A. xxx` / `B. xxx` / `C. xxx` 带字母编号",
-    "   - ❌「说吧，你卡在哪？」这种开放问句不算",
-    "   - ❌「要做 X 还是 Y」这种口头二选一也不算——**必须有明显的 A/B/C 视觉编号**",
-    "   - 数一数：我末尾有 ≥ 2 个 A/B/C 编号选项吗？没有就加到够",
+    rule3,
     "",
     "### 🟡 内容铁律（v0.7.7 沿用）",
     "",
@@ -169,7 +197,9 @@ function loadFinalReminder(): string {
     "",
     "---",
     "",
-    "**⚠️ 如果结构铁律 1-3 任何一条没过，整条重写——这比内容质量更重要。**",
+    shouldWaiveABC
+      ? `**⚠️ 当前第 ${userTurnCount} 轮翻转节奏：铁律 3 的\"不给 ABC + 反问拉数字\"优先级最高。如果你仍想给 ABC，整条重写。**`
+      : "**⚠️ 如果结构铁律 1-3 任何一条没过，整条重写——这比内容质量更重要。**",
     "**v0.7.8 的护城河是结构（70/20/10 + 3 轮挥完一题），不是单条文案的漂亮。**",
   ].join("\n");
 }
@@ -304,8 +334,8 @@ export function buildSystemPrompt(
   const responseStructure = loadResponseStructure();
   if (responseStructure) parts.push(responseStructure);
 
-  // 5. 最终提醒（尾位再强化 · 首尾夹击 · v0.7.8.1 加强版结构铁律）
-  parts.push(loadFinalReminder());
+  // 5. 最终提醒（尾位再强化 · 首尾夹击 · v0.7.9.4.2 轮次感知版）
+  parts.push(loadFinalReminder(mode, userTurnCount));
 
   return parts.join("\n\n---\n\n");
 }

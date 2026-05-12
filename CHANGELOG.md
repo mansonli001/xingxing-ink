@@ -8,6 +8,47 @@
 
 ---
 
+## [v0.7.9.4.2] - 2026-05-12 — 「真机走查发现 ABC 铁律架构冲突 · 修 P1」
+
+> **Hotfix · 真机走查发现 scathing/rational 第 1 轮仍被强压给 ABC**
+> v0.7.9.4.1 修完注入链路之后走查，升级节确实上线了 90%，但 scathing 第 1 轮还是给了
+> `A. 付费社群 / B. 1对1咨询 / C. 电商带货` — 违反"前 2 轮不抛 ABC"铁律。
+
+### 走查发现的 P1 根因
+
+`loadFinalReminder()` 是**无参数函数**，一刀切给所有档所有轮次同一份铁律：
+> **3. 末尾必有编号 forced choice** — 数一数：我末尾有 ≥ 2 个 A/B/C 编号选项吗？没有就加到够
+
+这条铁律在 final_reminder 尾位首尾夹击的**最高权重位**，压过了 v0.7.9.4 升级节的"前 2 轮不抛 ABC"。
+→ LLM 听 final_reminder 不听升级节，第 1 轮照样给 ABC 强压。
+
+### 修复
+
+`loadFinalReminder(mode, userTurnCount)` 改为**轮次感知**：
+
+| mode × 轮次 | 铁律 3 |
+|---|---|
+| casual（任何轮） | 末尾必有 A/B/C 编号（casual 升级节本来就允许第 1 轮给 ABC） |
+| rational / scathing · 第 1-2 轮 | ❌ **严禁 ABC** + 严禁路径建议 + 严禁温柔收尾 + ✅ 必须以反问拉数字收尾 |
+| rational / scathing · 第 3+ 轮 | 末尾必有 A/B/C 编号（升级节第 3 轮起解锁 ABC） |
+
+同时把"当前轮次 + 档位"显式写进 prompt 顶部让 LLM 更容易 anchor：
+`**当前轮次：第 N 轮 · scathing 档**`
+
+### Changed
+
+- `lib/prompts/index.ts` · `loadFinalReminder` 加 `mode` + `userTurnCount` 参数，前 2 轮 rational/scathing 走翻转铁律支路
+
+### Build
+
+- TypeScript 0 错误 · Lint 0 警告 · next build 通过
+
+### 0 mind repo 改动
+
+本次修复全部在主 repo 的 final_reminder 文案层，不动 mind repo，不动升级节内容。
+
+---
+
 ## [v0.7.9.4.1] - 2026-05-12 — 「v0.7.9.4 注入链路修复 · maxTokens 上调」
 
 > **Hotfix · 走查发现 v0.7.9.4 改的 mind 文件根本没生效**

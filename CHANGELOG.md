@@ -8,6 +8,76 @@
 
 ---
 
+## [v0.7.9.5.0] - 2026-05-12 — 「🚨 LLM 输出污染紧急修复 · 双层兜底」
+
+> **Hotfix · 真机暴露 scathing 第 1 轮把内部 system prompt 状态原样 echo 到对用户回复**
+> 用户截图：scathing 第 1 轮简历模板提问，回复顶部赫然出现：
+> ```
+> ⚠️ 当前轮次：第 1 轮 · scathing 档
+> 结构铁律核验通过？ 否 — 重新生成中…
+> ```
+> 同时段落标题前 LLM 模仿 `_arsenal.md` 的 🟢🟡🔴 档位标识，自己造了 `🟢 刀锋追问（1 把刀）` 的 emoji marker。
+> 用户看到内部代号 → 直接出戏，人设和专业感双重塌陷。
+
+### 双层兜底架构
+
+| 层 | 位置 | 作用 |
+|---|---|---|
+| **L1 prompt 治本** | `lib/prompts/index.ts` final_reminder 末尾 | 显式追加"输出污染绝对黑名单"指令，列出所有内部代号/铁律名/状态词/emoji marker 黑名单 |
+| **L1 prompt 治本** | `lib/prompts/_arsenal.md` 第 188-190 | 删掉 `casual 🟢 / rational 🟡 / scathing 🔴` 的 emoji 档位标识，避免 LLM 模仿 |
+| **L2 代码治标** | `lib/prompts/sanitizer.ts`（新建） | 通用过滤工具：按 `\n\n` 分段，段首命中黑名单整段 strip；行首 emoji marker 单独剥掉 |
+| **L2 代码治标** | `app/api/chat/stream/route.ts` SSE | 在已有的 `stripStageDirections` 行级过滤之后再叠一层段缓冲 sanitizer，按段 emit |
+| **L2 代码治标** | `components/MessageBubble.tsx` 渲染前 | 前端再 sanitize 一次，双保险（防止后端漏过的 edge case） |
+
+### 黑名单设计（边界保护）
+
+段首匹配必须是"具体短语"，避免误伤用户原话：
+
+- ❌ 仅匹配"档"字 → 会误伤 "你想做哪一档付费？"
+- ✅ 匹配 "scathing 档" / "casual 档" / "rational 档" 完整短语
+- ✅ 匹配 "重新生成中" 完整短语，不误伤 "你需要重新生成简历"
+
+完整黑名单：
+- 内部状态词：`⚠️ 当前轮次` / `当前轮次：` / `结构铁律核验` / `核验通过？` / `重新生成中` / `整条重写`
+- 内部档位代号：`scathing 档` / `casual 档` / `rational 档`（含半角无空格变体）
+- 内部铁律名：`70/20/10` / `70-20-10` / `forced choice 段` / `ABC 段`
+- 元词汇：`DIRECTOR_NOTE` / `[DIRECTOR_NOTE`
+- 行首 emoji marker：`🟢` / `🟡` / `🔴` / `⚠️` / `🚨`（仅行首，行内自然 emoji 不剥）
+
+### 验证
+
+`scripts/_v0795_sanitizer_health.mjs` · **35/35 全 PASS**：
+- Test 1 真机污染样本 5/5 ✅
+- Test 2 行首 emoji marker 4/4 ✅
+- Test 3 行内 emoji 保留 1/1 ✅
+- Test 4 内部档位代号段 strip 3/3 ✅
+- Test 5 用户合法用词不被误伤 4/4 ✅
+- Test 6 内部铁律名段 strip 3/3 ✅
+- Test 7 多段混合处理 6/6 ✅
+- Test 8 流式增量切段 7/7 ✅
+- Test 9 边界条件 2/2 ✅
+
+### Added
+
+- `lib/prompts/sanitizer.ts` · `sanitizeLLMOutput(text)` 整段过滤 + `sanitizeStreamSegments(buffer)` 流式增量切段
+- `scripts/_v0795_sanitizer_health.mjs` · 健康检查脚本，35 个用例覆盖污染/边界/流式
+
+### Changed
+
+- `lib/prompts/index.ts` · `loadFinalReminder` 末尾追加"输出污染绝对黑名单"指令段，最高优先级
+- `lib/prompts/_arsenal.md` · 第 188-190 表格档位列删 🟢🟡🔴 emoji
+- `app/api/chat/stream/route.ts` · `flushLine` 之后接段缓冲 sanitizer，流结束时单独 flush 尾段
+- `components/MessageBubble.tsx` · `safeContent = useMemo(sanitizeLLMOutput(message.content))`，ReactMarkdown / AudioPlayer / handleQuote / handleCopy 全部消费 safeContent
+
+### 不影响范围
+
+- ✅ v0.7.9.3 错误处理 toFriendlyError 0 改动
+- ✅ v0.7.9.4.x 升级节注入逻辑 0 改动
+- ✅ q_picker / arsenal 命中 / methodology 加载 全 0 改动
+- ✅ 用户消息原样保留（sanitizer 仅作用于 AI 输出）
+
+---
+
 ## [v0.7.9.4.2] - 2026-05-12 — 「真机走查发现 ABC 铁律架构冲突 · 修 P1」
 
 > **Hotfix · 真机走查发现 scathing/rational 第 1 轮仍被强压给 ABC**

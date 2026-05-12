@@ -2,10 +2,11 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AudioPlayer } from "./AudioPlayer";
 import type { ModeId } from "./modeMeta";
 import { MODE_META } from "./modeMeta";
+import { sanitizeLLMOutput } from "@/lib/prompts/sanitizer";
 
 // TTS 总开关：默认关闭。配置 NEXT_PUBLIC_TTS_ENABLED=true 才启用语音
 const TTS_ENABLED = process.env.NEXT_PUBLIC_TTS_ENABLED === "true";
@@ -46,6 +47,14 @@ export function MessageBubble({
   const meta = message.mode ? MODE_META[message.mode] : MODE_META.scathing;
   const [copied, setCopied] = useState(false);
 
+  // v0.7.9.5：渲染前兜底过滤 LLM 输出污染（内部 anchor 词整段 strip + 行首 emoji marker 剥离）
+  // 后端 SSE 已经做过一次（lib/prompts/sanitizer.ts），前端再做一次双保险。
+  // 仅对 AI 消息生效；用户消息原样保留。
+  const safeContent = useMemo(
+    () => (isUser ? message.content : sanitizeLLMOutput(message.content)),
+    [isUser, message.content]
+  );
+
   if (isUser) {
     return (
       <div className="flex justify-end fade-in">
@@ -58,7 +67,7 @@ export function MessageBubble({
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(safeContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -77,7 +86,7 @@ export function MessageBubble({
    * 锚点最多 60 字，超出截断加"…"。
    */
   function handleQuote() {
-    const raw = message.content.trim();
+    const raw = safeContent.trim();
     // 按句号/问号/感叹号切句，保留标点
     const sentences = raw
       .split(/(?<=[。！？?!])\s*/)
@@ -161,7 +170,7 @@ export function MessageBubble({
               <span className="italic">醒醒正在打字……</span>
             ) : (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {message.content}
+                {safeContent}
               </ReactMarkdown>
             )}
           </div>
@@ -173,7 +182,7 @@ export function MessageBubble({
           message.content.length > 0 &&
           (TTS_ENABLED || message.presetAudio) ? (
             <AudioPlayer
-              text={message.content}
+              text={safeContent}
               mode={message.mode || "casual"}
               autoPlay={false}
               onPlayingChange={onSpeakingChange}

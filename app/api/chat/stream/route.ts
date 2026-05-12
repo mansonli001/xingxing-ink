@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { streamChat, type ChatMessage } from "@/lib/deepseek";
 import { getMode, buildSystemPrompt, MODES, type ModeId } from "@/lib/prompts";
+import { sanitizeLLMOutput, sanitizeStreamSegments } from "@/lib/prompts/sanitizer";
 import {
   appendMessage,
   getOrCreateSession,
@@ -118,12 +119,23 @@ export async function POST(req: NextRequest) {
         // v0.7.6：流式后置过滤器，扫掉 LLM 仍漏掉的舞台指示/旁白（圆括号/方括号包裹的动作描写）
         // 策略：按行缓冲——完整行出现时先过滤再发送，避免过滤把跨 chunk 的正常内容切碎
         let lineBuffer = "";
+        // v0.7.9.5：再叠一层段缓冲，做"内部状态泄漏整段 strip + 行首 emoji marker 剥离"
+        // 段缓冲喂 sanitizeStreamSegments：边累积，遇 \n\n 边界 emit 完整段
+        let segmentBuffer = "";
+        const flushDelta = (clean: string) => {
+          if (!clean) return;
+          assistantText += clean;
+          send("delta", { content: clean });
+        };
         const flushLine = (line: string) => {
-          const cleaned = stripStageDirections(line);
-          if (cleaned) {
-            assistantText += cleaned;
-            send("delta", { content: cleaned });
-          }
+          // 第一层：舞台指示过滤（v0.7.6 行级，安全）
+          const strippedStage = stripStageDirections(line);
+          if (!strippedStage) return;
+          // 第二层：累积到段缓冲，按 \n\n 边界做 sanitizer 整段判定
+          segmentBuffer += strippedStage;
+          const [emit, rest] = sanitizeStreamSegments(segmentBuffer);
+          segmentBuffer = rest;
+          flushDelta(emit);
         };
 
         for await (const chunk of streamChat({
@@ -141,10 +153,16 @@ export async function POST(req: NextRequest) {
             nlIdx = lineBuffer.indexOf("\n");
           }
         }
-        // 流结束时把剩余 buffer 也过滤一次
+        // 流结束时把剩余 lineBuffer 也过滤一次
         if (lineBuffer) {
           flushLine(lineBuffer);
           lineBuffer = "";
+        }
+        // v0.7.9.5：流结束时把段缓冲剩余的"未到 \n\n 边界的尾段"也跑一次 sanitize 后 emit
+        if (segmentBuffer) {
+          const tailClean = sanitizeLLMOutput(segmentBuffer);
+          segmentBuffer = "";
+          flushDelta(tailClean);
         }
 
         appendMessage(session.id, {

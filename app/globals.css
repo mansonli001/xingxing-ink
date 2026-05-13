@@ -1816,79 +1816,61 @@ body[data-hydrated="true"] .hero-fallback {
 }
 
 /* ============================================
- * v0.7.9.7 · WeixinGuide（微信内置浏览器引导）
+ * v0.7.9.7.2 · ShareButton + ShareQRDialog
  *
- * 顶部条 A：暗血红渐变 + 主题色边 + "用浏览器打开" + 复制 + 二维码 三按钮
- * 二维码弹窗 C：居中卡片 + SVG 二维码 + 域名文本 + 关闭按钮
+ * 拆掉 v0.7.9.7 顶部红条 WeixinGuide（用户反馈：丑 + 不应主动赶用户走）
+ * 改为输入框右上角小图标 + 分享导向二维码弹窗
  *
- * 仅在 navigator.userAgent 包含 MicroMessenger 时由 React 渲染挂载。
+ * 设计原则：
+ *   - 不做 UA 检测（任何环境都显示，微信内/外同一行为）
+ *   - 不主动出现，仅用户点小图标时弹出
+ *   - 文案改为"扫码分享给朋友"（不是"在浏览器打开"）
  * ============================================ */
-.wx-guide-bar {
-  position: relative;
-  z-index: 50;
-  background: linear-gradient(
-    135deg,
-    rgba(153, 27, 27, 0.95) 0%,
-    rgba(40, 16, 26, 0.98) 100%
-  );
-  border-bottom: 1px solid rgba(232, 180, 184, 0.2);
-  padding: 8px 12px;
+
+/* 分享按钮（输入框右上角小图标） */
+.share-btn {
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-family: "PingFang SC", "Noto Serif SC", serif;
-  color: #fff5f0;
-  box-shadow: 0 2px 12px -4px rgba(153, 27, 27, 0.4);
-  animation: wx-guide-slide-down 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.wx-guide-bar-text {
-  font-size: 13px;
-  font-weight: 500;
-  flex: 1;
-  min-width: 180px;
-  line-height: 1.45;
-  letter-spacing: 0.02em;
-}
-.wx-guide-bar-text strong {
-  color: #e8b4b8;
-  font-weight: 600;
-}
-.wx-guide-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.wx-guide-btn {
-  background: rgba(232, 180, 184, 0.12);
-  border: 1px solid rgba(232, 180, 184, 0.4);
-  color: #fff5f0;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 6px;
+  justify-content: center;
+  background: rgba(232, 180, 184, 0.06);
+  border: 1px solid rgba(232, 180, 184, 0.18);
+  border-radius: 8px;
+  color: rgba(232, 180, 184, 0.7);
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
-  white-space: nowrap;
 }
-.wx-guide-btn:hover {
-  background: rgba(232, 180, 184, 0.22);
-  border-color: #e8b4b8;
+.share-btn:hover {
+  background: rgba(232, 180, 184, 0.13);
+  border-color: rgba(232, 180, 184, 0.4);
+  color: #e8b4b8;
   transform: translateY(-1px);
+  box-shadow: 0 0 16px -4px rgba(232, 180, 184, 0.3);
 }
-.wx-guide-btn:active {
-  transform: scale(0.96);
+.share-btn:active {
+  transform: scale(0.95);
 }
-@keyframes wx-guide-slide-down {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
+.share-btn:focus-visible {
+  outline: 2px solid rgba(232, 180, 184, 0.5);
+  outline-offset: 2px;
+}
+/* 输入框右上角定位（绝对定位，不挤占输入框宽度） */
+.share-btn-corner {
+  position: absolute;
+  top: -38px;
+  right: 4px;
+  z-index: 5;
+}
+@media (max-width: 499px) {
+  .share-btn-corner {
+    top: -36px;
+    right: 2px;
   }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+  .share-btn {
+    width: 30px;
+    height: 30px;
   }
 }
 
@@ -1942,16 +1924,37 @@ body[data-hydrated="true"] .hero-fallback {
   height: 200px;
 }
 .wx-qr-url {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #A9A8C0;
   background: rgba(232, 180, 184, 0.05);
   border: 1px solid rgba(232, 180, 184, 0.1);
   border-radius: 6px;
-  padding: 6px 10px;
-  margin-bottom: 14px;
+  padding: 7px 10px;
+  margin-bottom: 16px;
   word-break: break-all;
   font-family: "Cormorant Garamond", "Noto Serif SC", serif;
   letter-spacing: 0.03em;
+}
+/* v0.7.9.7.2：弹窗下方双按钮容器（复制链接 + 关闭） */
+.wx-qr-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.wx-qr-secondary {
+  background: rgba(212, 175, 122, 0.1);
+  border: 1px solid rgba(212, 175, 122, 0.35);
+  color: #d4af7a;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+.wx-qr-secondary:hover {
+  background: rgba(212, 175, 122, 0.18);
+  border-color: #d4af7a;
 }
 .wx-qr-close {
   background: rgba(232, 180, 184, 0.08);
@@ -2000,10 +2003,12 @@ body[data-hydrated="true"] .hero-fallback {
   100% { opacity: 0; transform: translate(-50%, -8px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .wx-guide-bar,
   .wx-qr-overlay,
   .wx-qr-card,
   .wx-qr-toast {
     animation: none;
+  }
+  .share-btn:hover {
+    transform: none;
   }
 }

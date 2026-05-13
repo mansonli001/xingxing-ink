@@ -13,6 +13,7 @@ import { MicInput } from "./MicInput";
 import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 import { DrawerTriggerButton } from "./SideDrawer";
+import { ShareButton } from "./ShareButton";
 
 interface ChatProps {
   mode: ModeId;
@@ -204,9 +205,11 @@ export function Chat({
       {/* 输入框 */}
       <div className="relative z-10 px-4 sm:px-6 pb-5 pt-3 border-t border-xx-border bg-xx-bg/80 backdrop-blur-sm">
         <div
-          className="input-safe-zone w-full"
+          className="input-safe-zone w-full relative"
           data-has-messages={messages.length > 0 ? "true" : "false"}
         >
+          {/* v0.7.9.7.2：分享按钮（输入框右上角小图标，点击弹二维码弹窗）*/}
+          <ShareButton className="share-btn-corner" />
           <div className="input-mode-focus flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 transition-colors">
             <MicInput
               disabled={streaming}

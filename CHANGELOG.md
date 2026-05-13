@@ -8,6 +8,79 @@
 
 ---
 
+## [v0.7.9.7.2] - 2026-05-13 — 「微信引导重构 + OG 图 v2 紧凑版」
+
+> 用户真机反馈两个 P0：
+> 1. 微信顶部红条「丑 + 不应该主动赶用户走」
+> 2. OG 图三档符号渲染成 ☒ tofu 方块 + 整体太空难看
+>
+> 全部推倒重做。
+
+### Bug 1 · 微信引导彻底重构（不再赶用户走）
+
+**反思**：之前设计逻辑 = "微信内体验 < 浏览器 → 引导出去" = 把 70% 流量当 bug。
+**新逻辑** = 微信是主战场，体验就该好；只在用户想分享时给二维码。
+
+**Removed**
+- `components/WeixinGuide.tsx` · 顶部红条（彻底删除）
+- `app/HomeClient.tsx` · 不再渲染顶部引导
+
+**Added**
+- `components/ShareButton.tsx` · 输入框右上角小图标（24×24 QR icon · 主题色细线条）
+- `components/ShareQRDialog.tsx` · 分享二维码弹窗
+  - 标题「扫码分享给朋友」（不再是"在浏览器打开"）
+  - 描述「截屏发给朋友，让 ta 也来被姐怼一下」
+  - 双按钮：复制链接 + 关闭
+  - ESC 键关闭
+  - 任何环境都能用（不做 UA 检测）
+
+**Changed**
+- `components/Chat.tsx` · 输入框上方右侧挂载 ShareButton（绝对定位，不挤宽度）
+- `app/HomeClient.tsx` · header slogan 从「姐替你把想法熬一遍」改为「不哄人，只怼人」+ 0.12em 字距
+- `app/globals.css` · 删 `.wx-guide-*` 全部样式 + 加 `.share-btn` / `.share-btn-corner` / `.wx-qr-actions` / `.wx-qr-secondary` 样式 + 修 prefers-reduced-motion 块
+
+### Bug 2 · OG 图 v2 重做
+
+**根因**：
+- next/og 默认字体不支持 ❍ ⌖ ✕ Unicode 抽象符号 → 渲染为 tofu ☒
+- flex space-between 把元素硬撑开 → 视觉松散
+- 引文块只有边框无填充 → 失去盖章感
+
+**修复**：
+- 三档抽象符号 → **中文胶囊**「随便聊/讲道理/扇巴掌」
+  - 当前档：粗边框（2px）+ 主题色实底渐变 + 字重 700
+  - 其他档（无 mode 参数时全亮）：1.5px 边 + 半透明渐变 + 字重 500
+  - 灰档（有 mode 参数时其他两档）：opacity 0.4 + 极弱边
+- 整体改为**居中堆叠**（main flex column · justify-center），去掉 space-between 撑开
+- 引文块改为**实底盖章**：暗血红 0.22→0.08 渐变背景 + 50px outer glow + 30px inset glow
+- 主标题字号 220px → **180px**（更紧凑），主题色阴影 24px
+- 钩子句字号 56px → **50px** + 0.22em 字距（拉长仪式感）
+- 引文字号 52px → **48px** + textShadow 主题色光晕
+- 加**底部签名横线**：水平渐变线 + 「Loading in Progress / xingxing.starfluxes.com」一行
+- scathing 主色从 #991B1B 改为 **#CC3344**（OG 图上 #991B1B 太黑沉，#CC3344 更醒目）
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 + v07955 killabc 23/23（全部 0 回归）
+- /og 路由编译为 Edge Runtime ƒ（416KB）
+
+### 待用户验证
+
+1. 硬刷新主页 → 不再有顶部红条
+2. 输入框右上角 → 看到二维码小图标
+3. 点小图标 → 弹「扫码分享给朋友」
+4. 访问 /og + /og?mode=scathing 看新版图（中文胶囊 + 紧凑 + 实底盖章）
+5. 微信内打开 → 不再被打扰，体验等同浏览器（除现有 AudioPlayer/MicInput 各自的降级）
+
+### 不影响范围
+
+- ✅ v0.7.9.5/6 全部 0 回归（三档色锁/段落渐入/Toast/抽屉/12 方块/视觉地基/输出仪式三件套）
+- ✅ v0.7.9.7 SSR 壳 / HeroFallback 0 改动
+- ✅ 现有 MicroMessenger 检测在 AudioPlayer / MicInput / MessageBubble 仍保留（各自降级，不与 ShareButton 冲突）
+
+---
+
 ## [v0.7.9.7.1] - 2026-05-13 — 「OG 图重做：@vercel/og 三档动态版 + 钩子升级」
 
 > 用户反馈："OG 图我们是不是要好好设计" —— 原 image_gen + sips 暴力裁切版完全废弃，重做。

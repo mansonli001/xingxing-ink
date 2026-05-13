@@ -1776,3 +1776,234 @@ h3,
     font-size: 12px;
   }
 }
+
+/* ============================================
+ * v0.7.9.7 · HeroFallback（SSR 首屏壳）
+ *
+ * 服务器端渲染输出，hydrate 完成前撑场，hydrate 后隐藏。
+ * 爬虫 / 禁 JS / 慢网络场景 0 空白。
+ * ============================================ */
+.hero-fallback {
+  /* 默认显示 — SSR 阶段 + hydrate 之前 */
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.4s ease 0.1s, visibility 0s linear 0.5s;
+}
+/* hydrate 完成后，body[data-hydrated="true"] → HeroFallback 淡出 */
+body[data-hydrated="true"] .hero-fallback {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.hero-fallback .hero-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 18px;
+  border: 1.5px solid;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: "Noto Serif SC", "PingFang SC", serif;
+  letter-spacing: 0.06em;
+  background: rgba(20, 16, 26, 0.4);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+@media (max-width: 499px) {
+  .hero-fallback .hero-pill {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+}
+
+/* ============================================
+ * v0.7.9.7 · WeixinGuide（微信内置浏览器引导）
+ *
+ * 顶部条 A：暗血红渐变 + 主题色边 + "用浏览器打开" + 复制 + 二维码 三按钮
+ * 二维码弹窗 C：居中卡片 + SVG 二维码 + 域名文本 + 关闭按钮
+ *
+ * 仅在 navigator.userAgent 包含 MicroMessenger 时由 React 渲染挂载。
+ * ============================================ */
+.wx-guide-bar {
+  position: relative;
+  z-index: 50;
+  background: linear-gradient(
+    135deg,
+    rgba(153, 27, 27, 0.95) 0%,
+    rgba(40, 16, 26, 0.98) 100%
+  );
+  border-bottom: 1px solid rgba(232, 180, 184, 0.2);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: "PingFang SC", "Noto Serif SC", serif;
+  color: #fff5f0;
+  box-shadow: 0 2px 12px -4px rgba(153, 27, 27, 0.4);
+  animation: wx-guide-slide-down 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wx-guide-bar-text {
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  min-width: 180px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+.wx-guide-bar-text strong {
+  color: #e8b4b8;
+  font-weight: 600;
+}
+.wx-guide-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.wx-guide-btn {
+  background: rgba(232, 180, 184, 0.12);
+  border: 1px solid rgba(232, 180, 184, 0.4);
+  color: #fff5f0;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.wx-guide-btn:hover {
+  background: rgba(232, 180, 184, 0.22);
+  border-color: #e8b4b8;
+  transform: translateY(-1px);
+}
+.wx-guide-btn:active {
+  transform: scale(0.96);
+}
+@keyframes wx-guide-slide-down {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* QR 弹窗 */
+.wx-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(20, 16, 26, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: wx-qr-overlay-fade 0.25s ease both;
+}
+.wx-qr-card {
+  background: linear-gradient(180deg, #1f1929 0%, #14101a 100%);
+  border: 1px solid rgba(232, 180, 184, 0.25);
+  border-radius: 16px;
+  padding: 24px 24px 20px;
+  max-width: 320px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.7),
+    0 0 32px -8px rgba(232, 180, 184, 0.2);
+  animation: wx-qr-card-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  font-family: "PingFang SC", "Noto Serif SC", serif;
+  color: #f0f0ff;
+}
+.wx-qr-title {
+  font-family: "Noto Serif SC", serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #d4af7a;
+  margin-bottom: 4px;
+}
+.wx-qr-desc {
+  font-size: 12px;
+  color: #A9A8C0;
+  margin-bottom: 16px;
+  line-height: 1.55;
+}
+.wx-qr-svg {
+  display: block;
+  margin: 0 auto 14px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  width: 200px;
+  height: 200px;
+}
+.wx-qr-url {
+  font-size: 12px;
+  color: #A9A8C0;
+  background: rgba(232, 180, 184, 0.05);
+  border: 1px solid rgba(232, 180, 184, 0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 14px;
+  word-break: break-all;
+  font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+  letter-spacing: 0.03em;
+}
+.wx-qr-close {
+  background: rgba(232, 180, 184, 0.08);
+  border: 1px solid rgba(232, 180, 184, 0.3);
+  color: #f0f0ff;
+  font-size: 13px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+.wx-qr-close:hover {
+  background: rgba(232, 180, 184, 0.15);
+  border-color: #e8b4b8;
+}
+.wx-qr-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 16, 26, 0.95);
+  border: 1px solid rgba(232, 180, 184, 0.3);
+  color: #f0f0ff;
+  padding: 10px 18px;
+  border-radius: 24px;
+  font-size: 13px;
+  z-index: 101;
+  pointer-events: none;
+  font-family: "PingFang SC", serif;
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+  animation: wx-qr-toast-pop 2.4s ease both;
+}
+@keyframes wx-qr-overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes wx-qr-card-pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes wx-qr-toast-pop {
+  0% { opacity: 0; transform: translate(-50%, 12px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wx-guide-bar,
+  .wx-qr-overlay,
+  .wx-qr-card,
+  .wx-qr-toast {
+    animation: none;
+  }
+}

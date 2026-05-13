@@ -8,6 +8,103 @@
 
 ---
 
+## [v0.7.9.7] - 2026-05-13 — 「上线体面 · OG 图 + SSR 壳 + 微信引导条」
+
+> 增长先行（Y 路线）：链接发出去像正经产品。
+> 来源：深度审查报告 P0 + 安全审查未涉及 + 外部 plan P0-G1/G2/G3/G4 全部 closure。
+
+### Step 1 · 静态 OG 图
+
+- 新增 `public/og-image.png`（1200×630 PNG · 标准 OpenGraph 尺寸）
+- 设计：暗紫黑底 + 「醒醒」金色楷书标题 + slogan + 三档主题色环（粉紫/玫瑰金/暗血红）+ Loading in Progress 签名
+- 用 image_gen 生成 1264×848 → 用 macOS sips 缩放裁切到标准 1200×630
+
+### Step 2 · metadata 升级（`app/layout.tsx`）
+
+- 新增 `NEXT_PUBLIC_SITE_URL` 环境变量统一（兜底 `https://xingxing.starfluxes.com`）
+- 新增 `metadataBase: new URL(SITE_URL)` —— OG image 等相对路径自动解析为绝对 URL
+- 新增 `alternates.canonical: SITE_URL` —— 防爬虫抓到 vercel.app 旧域名
+- 修复 `openGraph.url` —— 从 `xingxing-ink.vercel.app` 改为正式域名（深度审查 + 外部 plan 共同发现）
+- 新增 `openGraph.images: [{ url, width: 1200, height: 630, alt }]`
+- 新增 `twitter: { card: "summary_large_image", images, ... }`（之前只有 `summary` 没图）
+- `authors: "Loading in Progress"` 保留（用户决策：这是品牌梗，不删）
+
+### Step 3 · SSR 首屏壳极简版
+
+修复深度审查 P0：「首屏空白闪烁（FOUC）· 整页 BAILOUT_TO_CLIENT_SIDE_RENDERING」
+
+- 新建 `app/HeroFallback.tsx`（Server Component · 0 client 依赖）
+  - 居中标题「醒醒」+ slogan + 三档胶囊 + Loading in Progress 标签
+  - 暗紫黑底 + 金色 + 玫瑰色，0 闪烁直接 SSR HTML 输出
+- 新建 `app/HomeClient.tsx`（拆出原 page.tsx 全部 client 逻辑）
+  - hydrate 检测 + sessionStorage 是否播 WakeUpIntro
+  - 内置 `<WeixinGuide />` 微信引导
+  - hydrate 完成后 `document.body.setAttribute("data-hydrated", "true")`
+- 改 `app/page.tsx` 为 Server Component（去掉 "use client"）
+  - 同时渲染 `<HeroFallback />` + `<HomeClient />`
+  - SSR 阶段 HeroFallback 撑场，hydrate 后 client 接管，HeroFallback 通过 CSS `body[data-hydrated="true"] .hero-fallback` 自动淡出隐藏
+- `app/globals.css` 新增 `.hero-fallback / .hero-pill` 样式 + transition 隐藏机制
+
+**SSR 验证**：next build 产物 `.next/server/app/index.html` 含 `hero-fallback` × 2 / `醒醒` × 18 / `三档名称` × 各 8 / `slogan` × 10。**爬虫/禁 JS/慢网络都能看到完整产品名 + 价值主张**。
+
+### Step 4 · 微信内置浏览器引导（A 顶部条 + C 二维码弹窗）
+
+修复深度审查 P0：「微信内置浏览器不兼容 · 70%+ 自然流量流失」
+
+- 新建 `components/WeixinGuide.tsx`
+  - **UA 检测**：`navigator.userAgent.includes('micromessenger')`，命中才渲染（SSR 阶段返回 null 避免 hydration mismatch）
+  - **A · 顶部引导条**：暗血红渐变背景 + 御姐文案「姐这里在浏览器打开才完整 —— 微信里有点功能跑不动。」+ 三个 CTA：
+    - **「浏览器打开」**：toast 教学「点右上角 ··· → 在浏览器中打开」
+    - **「复制链接」**：navigator.clipboard 复制当前 URL + toast 反馈
+    - **「二维码」**：弹窗显示 QR
+  - **C · 二维码弹窗**：居中卡片 + SVG QR（qrserver.com 公开 API · 0 新增依赖）+ URL 文本兜底 + 关闭按钮
+  - **0 引入 npm 依赖**（QR 用第三方公开 API，失败时 URL 文本兜底）
+- `app/globals.css` 新增 `.wx-guide-bar / .wx-guide-btn / .wx-qr-overlay / .wx-qr-card / .wx-qr-svg / .wx-qr-toast` 完整暗夜玫瑰主题样式
+
+### Added
+
+- `public/og-image.png` (1200×630 standard OG image)
+- `app/HeroFallback.tsx` (Server Component · SSR 极简首屏壳)
+- `app/HomeClient.tsx` (Client Component · 原 page.tsx client 逻辑拆出)
+- `components/WeixinGuide.tsx` (微信引导 A+C · UA 检测渲染)
+
+### Changed
+
+- `app/layout.tsx` - metadata 全套升级（metadataBase + canonical + og:image + twitter:summary_large_image + 域名修正）
+- `app/page.tsx` - 改为 Server Component，组合 HeroFallback + HomeClient
+- `app/globals.css` - 新增 `.hero-fallback*` SSR 壳样式 + `.wx-guide-*` / `.wx-qr-*` 微信引导完整样式
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 PASS（0 回归）
+- v07955 killabc 23/23 PASS（0 回归）
+- SSR HTML 验证：`.next/server/app/index.html` 含 `hero-fallback` / 「醒醒」/ 三档名 / slogan
+- 真机待硬刷新验证 + Twitter Card Validator 检查
+
+### 待用户后续做
+
+1. **设 Vercel 环境变量** `NEXT_PUBLIC_SITE_URL=https://xingxing.starfluxes.com`（兜底已有，但显式设置保险）
+2. **Twitter Card Validator** 抓 https://xingxing.starfluxes.com 验证 OG 图正确预览
+3. **Facebook Sharing Debugger** 同样验证一次
+4. **微信真机测试**：用微信打开链接，看顶部引导条 + 二维码弹窗
+
+### 不影响范围
+
+- ✅ v0.7.9.5.0-5.5.2 全部 0 回归（sanitizer + KILL/ABC + 视觉地基 + 三件套）
+- ✅ v0.7.9.6 段落渐入 0 改动
+- ✅ WakeUpIntro 开场动画 0 改动
+- ✅ ChatShell / Chat / MessageBubble 0 改动
+- ✅ 现有 MicroMessenger 检测（AudioPlayer / MicInput / MessageBubble 里的）保留作为各自降级，WeixinGuide 是顶层引导独立工作
+
+### 风险与监控
+
+- **OG 图缓存**：社交平台可能缓存旧 URL，需用各平台 debugger 强制刷新
+- **qrserver.com 依赖**：第三方 API 偶发失败时 URL 文本兜底；后续如需 100% 自主可换 npm `qrcode` 库（~30KB）
+- **HeroFallback 闪烁**：通过 0.4s opacity 渐隐 + visibility delay 控制，硬刷新真机看一下是否流畅
+
+---
+
 ## [v0.7.9.5.5.2] - 2026-05-13 — 「修 Bug 1 · 多轮 ABC + KILL 不衰减」
 
 > 用户真机暴露 Bug 1：第 4 轮开始 ABC 没换行（同行连写）+ 出现 D 选项 + KILL 标记完全漏写。

@@ -1,59 +1,28 @@
-"use client";
+/**
+ * v0.7.9.7 · app/page.tsx · Server Component（顶层）
+ *
+ * 改造前：整个 page.tsx 是 "use client"，hydrate 前只输出
+ *          <div className="fixed inset-0 bg-xx-bg" /> → SSR 首屏空白 FOUC
+ *
+ * 改造后：
+ *   - 顶层是 Server Component（无 "use client"），SSR 阶段直接渲染 HeroFallback
+ *     真实 HTML 出现在首屏，爬虫/禁 JS 都能看到产品名 + 价值主张 + 三档名
+ *   - HomeClient 是 Client Component，hydrate 后接管交互（WakeUpIntro / ChatShell）
+ *   - HeroFallback 在 hydrate 后通过 CSS [data-hydrated="true"] 自动隐藏，
+ *     不影响交互不闪烁
+ *
+ * 这是 Next.js 推荐的「Streaming SSR + 客户端水合」模式。
+ */
+import { HeroFallback } from "./HeroFallback";
+import { HomeClient } from "./HomeClient";
 
-import { useEffect, useState } from "react";
-import { ChatShell } from "@/components/ChatShell";
-import { WakeUpIntro } from "@/components/WakeUpIntro";
-
-export default function Home() {
-  // 默认 true（避免首屏闪过），mount 后读 sessionStorage 决定是否播
-  const [showIntro, setShowIntro] = useState(true);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    try {
-      const played = sessionStorage.getItem("xx_intro_played");
-      if (played === "1") {
-        setShowIntro(false);
-      }
-    } catch {
-      // 隐私模式忽略
-    }
-    setHydrated(true);
-  }, []);
-
-  // 未 hydrate 完成前直接给一个深色全屏占位，避免 FOUC
-  if (!hydrated) {
-    return <div className="fixed inset-0 bg-xx-bg" />;
-  }
-
-  if (showIntro) {
-    return <WakeUpIntro onDone={() => setShowIntro(false)} />;
-  }
-
+export default function Page() {
   return (
-    <main className="h-[100dvh] w-full bg-xx-bg flex flex-col">
-      <header className="relative z-20 border-b border-xx-border px-3 sm:px-6 py-3 flex items-center justify-between gap-2 bg-xx-bg/85 backdrop-blur-md">
-        <div className="flex items-baseline gap-2 sm:gap-3 min-w-0 flex-1">
-          <span className="logo-serif text-2xl sm:text-[26px] leading-none shrink-0">
-            醒醒
-          </span>
-          <span className="hero-slogan text-xx-rose/85 font-serif min-w-0 truncate">
-            姐替你把想法熬一遍
-          </span>
-          <span className="hidden md:inline text-[11px] text-xx-text-dim font-serif tracking-[0.25em] italic opacity-70 shrink-0">
-            · 别做梦了
-          </span>
-        </div>
-        <span
-          className="text-[10px] sm:text-[11px] text-xx-text-dim tracking-[0.2em] sm:tracking-[0.35em] font-display font-semibold shrink-0 select-none"
-          aria-label="Loading in Progress"
-        >
-          LOADING IN PROGRESS
-        </span>
-      </header>
-      <div className="flex-1 overflow-hidden">
-        <ChatShell />
-      </div>
-    </main>
+    <>
+      {/* SSR 渲染：标题 + slogan + 三档胶囊（爬虫和禁 JS 用户能看到的内容） */}
+      <HeroFallback />
+      {/* Client 渲染：hydrate 后接管，渲染 WakeUpIntro 或主聊天界面 */}
+      <HomeClient />
+    </>
   );
 }

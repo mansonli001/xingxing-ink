@@ -8,6 +8,80 @@
 
 ---
 
+## [v0.7.9.7.1] - 2026-05-13 — 「OG 图重做：@vercel/og 三档动态版 + 钩子升级」
+
+> 用户反馈："OG 图我们是不是要好好设计" —— 原 image_gen + sips 暴力裁切版完全废弃，重做。
+>
+> 三档动态参数化：`/og` 默认综合版 / `/og?mode=casual|rational|scathing` 三档专属版。
+
+### 钩子文案升级（全站统一）
+
+- 旧 slogan：姐替你把想法熬一遍 → ❌ 已弃用
+- **新主钩子**：不哄人，只怼人（玫瑰金 64px）
+- **新引文**：你的想法，敢给姐看吗？（白色 56px + 主题色光晕）
+
+### 三档专属金句（用户拍板 A1/B2/C3）
+
+| 档 | 金句 | 颜色 |
+|---|---|---|
+| casual | 姐不陪你做梦，但陪你说人话 | 粉紫 #D170E8 |
+| rational | 姐不评价你的感受，只看你的逻辑 | 玫瑰金 #E8B4B8 |
+| scathing | 别哭，姐还没开始扇 | 暗血红 #991B1B |
+
+### Added
+
+- `app/og/route.tsx` · 动态 OG 图生成路由（Edge Runtime · next/og）
+  - 三段递进排版：主标 240px「醒醒」+ 钩子 56px「不哄人，只怼人」+ 引文块 + 三档抽象符号
+  - 三档抽象符号：❍ 随便聊（粉紫）/ ⌖ 讲道理（玫瑰金）/ ✕ 扇巴掌（暗血红）
+  - URL 参数 `mode=casual|rational|scathing` 切档
+    - 背景径向光晕换主题色
+    - 引文块换对应金句
+    - 当前档符号高亮，其他档透明度 30%
+  - 默认（无参数）：综合版 = 三档全亮 + 默认引文
+  - CDN 缓存 1 小时（s-maxage=3600）
+
+### Changed
+
+- `app/layout.tsx`
+  - `title` / `description` 升级钩子文案（不哄人，只怼人 + 你的想法，敢给姐看吗？）
+  - `openGraph.images.url` 从 `/og-image.png` 改为 `/og`（动态路由）
+  - `twitter.images` 同步改为 `/og`
+- `app/HeroFallback.tsx`
+  - 副标题从「姐替你把想法熬一遍」改为「不哄人，只怼人」+ 0.18em letter-spacing
+
+### Removed
+
+- `public/og-image.png` · 静态 OG 图（被动态路由替代，0 用户）
+
+### 技术决策
+
+- **0 新依赖**：Next.js 14.2.5 已内置 `next/og`（无需安装 @vercel/og 独立包）
+- **Edge Runtime**：OG 路由跑在 Vercel Edge，全球 CDN 节点就近渲染
+- **三档抽象符号**：用 ❍ / ⌖ / ✕ 替代 AI 生美女头像（避免廉价感 + 跟现有 SilhouetteBackdrop 不打架）
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 PASS（0 回归）
+- v07955 killabc 23/23 PASS（0 回归）
+- `/og` 路由编译为 Edge Runtime ƒ（416KB route.js）
+- 待真机：opengraph.xyz / Twitter Card Validator + 访问 4 个 URL 看 4 张图
+
+### 不影响范围
+
+- ✅ v0.7.9.7 SSR 壳（HeroFallback / HomeClient）保留，仅副标题文案改
+- ✅ v0.7.9.7 微信引导（WeixinGuide）0 改动
+- ✅ v0.7.9.5/5.5.x / 6 全部 0 回归
+
+### 待用户验证
+
+1. 硬刷新 `https://xingxing.starfluxes.com/og` 看默认综合版
+2. 访问 `/og?mode=scathing` 看暗血红专属版
+3. opengraph.xyz 抓首页 URL 验证社交平台预览
+4. （可选）转发链接到微信文件传输助手看大图卡片
+
+---
+
 ## [v0.7.9.7] - 2026-05-13 — 「上线体面 · OG 图 + SSR 壳 + 微信引导条」
 
 > 增长先行（Y 路线）：链接发出去像正经产品。

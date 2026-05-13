@@ -20,9 +20,9 @@ const SITE_URL =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "醒醒 · 姐替你把想法熬一遍",
+  title: "醒醒 · 不哄人，只怼人",
   description:
-    "醒醒——御姐风格的 AI 对话产品。你扔过来的想法、PRD、人生选择，姐替你熬一遍，熬清楚。三档模式：随便聊 / 讲道理 / 扇巴掌。别做梦了，醒醒。",
+    "醒醒——御姐风格的 AI 对话产品。不哄人，只怼人。你的想法，敢给姐看吗？三档模式：随便聊 / 讲道理 / 扇巴掌。别做梦了，醒醒。",
   keywords: [
     "醒醒",
     "AI",
@@ -38,28 +38,30 @@ export const metadata: Metadata = {
     canonical: SITE_URL,
   },
   openGraph: {
-    title: "醒醒 · 姐替你把想法熬一遍",
+    title: "醒醒 · 不哄人，只怼人",
     description:
-      "御姐风格 AI，把你模糊的想法熬成清楚的判断。三档模式可选：随便聊 / 讲道理 / 扇巴掌。",
+      "御姐风格 AI，把你模糊的想法熬成清楚的判断。你的想法，敢给姐看吗？三档模式：随便聊 / 讲道理 / 扇巴掌。",
     url: SITE_URL,
     siteName: "醒醒",
     locale: "zh_CN",
     type: "website",
     images: [
       {
-        url: "/og-image.png",
+        // v0.7.9.7.1：动态 OG 图（next/og 实时生成）
+        // 默认 /og 综合版；后续可附 ?mode=casual|rational|scathing 切档
+        url: "/og",
         width: 1200,
         height: 630,
-        alt: "醒醒 · 姐替你把想法熬一遍",
+        alt: "醒醒 · 不哄人，只怼人 · 你的想法，敢给姐看吗？",
         type: "image/png",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "醒醒 · 姐替你把想法熬一遍",
-    description: "御姐风格 AI · 三档模式可选：随便聊 / 讲道理 / 扇巴掌。",
-    images: ["/og-image.png"],
+    title: "醒醒 · 不哄人，只怼人",
+    description: "御姐风格 AI · 你的想法，敢给姐看吗？",
+    images: ["/og"],
   },
 };
 

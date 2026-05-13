@@ -40,12 +40,12 @@ export function HeroFallback() {
         >
           醒醒
         </h1>
-        {/* 副标题 slogan */}
+        {/* 副标题 slogan（v0.7.9.7.1 钩子升级：不哄人，只怼人） */}
         <p
           className="font-serif text-base sm:text-lg md:text-xl"
-          style={{ color: "#e8b4b8", opacity: 0.85 }}
+          style={{ color: "#e8b4b8", opacity: 0.9, letterSpacing: "0.18em" }}
         >
-          姐替你把想法熬一遍
+          不哄人，只怼人
         </p>
         {/* 三档胶囊 */}
         <div className="flex gap-2 sm:gap-3 mt-4 flex-wrap justify-center">

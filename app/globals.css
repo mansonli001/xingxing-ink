@@ -1898,7 +1898,8 @@ body[data-hydrated="true"] .hero-fallback {
   padding: 26px 24px 22px;
   max-width: 320px;
   width: 100%;
-  max-height: calc(100dvh - 32px); /* 手机端不会溢出 */
+  /* v0.7.9.7.4：三重 min() 兜底，不管 dvh 支不支持都不溢出 */
+  max-height: min(calc(100vh - 32px), 640px);
   overflow-y: auto;
   text-align: center;
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.7),
@@ -2015,6 +2016,57 @@ body[data-hydrated="true"] .hero-fallback {
   10% { opacity: 1; transform: translate(-50%, 0); }
   85% { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+/* v0.7.9.7.4 · 手机端弹窗紧凑适配（窄屏 + 矮屏） */
+@media (max-width: 499px) {
+  .wx-qr-card {
+    padding: 20px 20px 18px;
+    max-height: min(calc(100vh - 24px), 560px);
+  }
+  .wx-qr-title {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+  .wx-qr-desc {
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .wx-qr-svg {
+    width: 160px;
+    height: 160px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+  .wx-qr-url {
+    font-size: 11px;
+    padding: 6px 8px;
+    margin-bottom: 12px;
+  }
+  .wx-qr-secondary,
+  .wx-qr-close {
+    padding: 7px 14px;
+    font-size: 12.5px;
+  }
+}
+/* 矮屏手机（iPhone SE / iPhone 8）额外紧凑 */
+@media (max-height: 700px) and (max-width: 499px) {
+  .wx-qr-card {
+    padding: 16px 18px 14px;
+  }
+  .wx-qr-svg {
+    width: 140px;
+    height: 140px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+  .wx-qr-title {
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+  .wx-qr-desc {
+    font-size: 11.5px;
+    margin-bottom: 10px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .wx-qr-overlay,

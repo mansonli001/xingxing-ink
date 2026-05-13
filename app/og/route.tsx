@@ -70,10 +70,10 @@ export async function GET(request: Request) {
   const activeMeta = activeMode ? MODE_META[activeMode] : null;
   const quote = activeMeta?.quote || DEFAULT_QUOTE;
 
-  // 背景径向光晕（紧凑紫黑底 + 主题色光晕）
+  // 背景径向光晕（紧凑紫黑底 + 主题色光晕 · satori 兼容写法：不带尺寸）
   const bgGradient = activeMeta
-    ? `radial-gradient(ellipse 800px 600px at 50% 50%, rgba(${activeMeta.glowRGB}, 0.22) 0%, transparent 60%), radial-gradient(ellipse 400px 300px at 20% 80%, rgba(${activeMeta.glowRGB}, 0.15) 0%, transparent 55%), linear-gradient(180deg, #14101a 0%, #1f1929 100%)`
-    : `radial-gradient(ellipse 600px 400px at 25% 30%, rgba(209, 112, 232, 0.15) 0%, transparent 50%), radial-gradient(ellipse 600px 400px at 75% 60%, rgba(204, 51, 68, 0.18) 0%, transparent 50%), linear-gradient(180deg, #14101a 0%, #1f1929 100%)`;
+    ? `radial-gradient(circle at 50% 50%, rgba(${activeMeta.glowRGB}, 0.22) 0%, transparent 60%), radial-gradient(circle at 20% 80%, rgba(${activeMeta.glowRGB}, 0.15) 0%, transparent 55%), linear-gradient(180deg, #14101a 0%, #1f1929 100%)`
+    : `radial-gradient(circle at 25% 30%, rgba(209, 112, 232, 0.15) 0%, transparent 50%), radial-gradient(circle at 75% 60%, rgba(204, 51, 68, 0.18) 0%, transparent 50%), linear-gradient(180deg, #14101a 0%, #1f1929 100%)`;
 
   // 引文块的颜色（无 mode 时用暗血红）
   const quoteColor = activeMeta?.glowRGB || "204, 51, 68";
@@ -114,7 +114,6 @@ export async function GET(request: Request) {
               textShadow:
                 "0 4px 24px rgba(204, 51, 68, 0.55), 0 0 48px rgba(212, 175, 122, 0.35)",
               display: "flex",
-              marginRight: "-0.16em" /* 抵消末字字距，视觉居中 */,
             }}
           >
             醒醒
@@ -128,7 +127,6 @@ export async function GET(request: Request) {
               color: "#e8b4b8",
               letterSpacing: "0.22em",
               display: "flex",
-              marginRight: "-0.22em",
             }}
           >
             不哄人，只怼人
@@ -208,7 +206,6 @@ export async function GET(request: Request) {
                       color: meta.color,
                       letterSpacing: "0.16em",
                       display: "flex",
-                      marginRight: "-0.16em",
                     }}
                   >
                     {meta.label}

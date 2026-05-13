@@ -108,6 +108,7 @@ export function Chat({
         mode={mode}
         hasMessages={messages.length > 0}
         speaking={isSpeaking}
+        turnCount={turnCount}
       />
 
       {/* 顶部：对话中显示"杠精风格"徽章（产品名 + 当前人格 + 轮次） */}

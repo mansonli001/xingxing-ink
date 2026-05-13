@@ -274,7 +274,8 @@ export function MessageBubble({
         </div>
         <div
           className={[
-            "ai-bubble rounded-[20px] rounded-tl-[6px] border bg-xx-bg-2/92 backdrop-blur-sm px-5 py-4",
+            // v0.7.9.5.5.1：AI 气泡 padding +4px（呼吸感更强，不贴边）
+            "ai-bubble rounded-[20px] rounded-tl-[6px] border bg-xx-bg-2/92 backdrop-blur-sm px-6 py-5",
           ].join(" ")}
         >
           <div

@@ -323,6 +323,53 @@ h3,
   box-shadow: 0 0 36px -4px rgba(168, 50, 68, 0.65);
 }
 
+/* v0.7.9.5.5.1 · 模式按钮选中态加强（更亮 / 更强发光 / 微浮起）
+ * 原有 mode-glow-* 保留作为兜底，mode-pill-active 用主题色强化
+ * 让用户能明显分辨"我现在在哪一档" */
+.mode-pill-active {
+  transform: translateY(-1.5px);
+  position: relative;
+  /* 微妙的 inner highlight 让按钮看起来"被点亮" */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+}
+.mode-pill-active::after {
+  /* 顶部高光 1px 线（点亮感） */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+/* 三档差异化 outer glow 加强（覆盖原 mode-glow-*，更强更聚焦） */
+.mode-pill-active-casual {
+  box-shadow:
+    0 0 32px -2px rgba(209, 112, 232, 0.55),
+    0 0 12px -2px rgba(209, 112, 232, 0.35),
+    inset 0 0 12px -4px rgba(209, 112, 232, 0.2);
+}
+.mode-pill-active-rational {
+  box-shadow:
+    0 0 32px -2px rgba(212, 175, 122, 0.5),
+    0 0 12px -2px rgba(212, 175, 122, 0.35),
+    inset 0 0 12px -4px rgba(212, 175, 122, 0.2);
+}
+.mode-pill-active-scathing {
+  box-shadow:
+    0 0 36px -2px rgba(153, 27, 27, 0.7),
+    0 0 14px -2px rgba(153, 27, 27, 0.5),
+    inset 0 0 12px -4px rgba(153, 27, 27, 0.25);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-pill-active {
+    transform: none;
+  }
+}
+
 /* 卡片入场动画 */
 .fade-in {
   animation: fade-in 0.4s ease-out;
@@ -519,10 +566,18 @@ h3,
    ③ AI 正在说话（speaking）：呼吸时 blur 减半到 8px + opacity 推到 0.7（在 keyframe 里做）
    —— 营造"她认真说话时浮现出来"而非"突然变亮"的感觉 */
 .silhouette-img[data-active="true"] {
-  opacity: 0.32;
+  /* v0.7.9.5.5.1：opacity / blur 由父节点 --silhouette-opacity / --silhouette-blur 驱动
+   * 父节点 SilhouetteBackdrop 按 turnCount 计算并 inline style 注入
+   * fallback 0.32（兼容 turnCount 缺失场景） */
+  opacity: var(--silhouette-opacity, 0.32);
+  filter: blur(var(--silhouette-blur, 4px));
+  transition:
+    opacity 1.5s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-  opacity: 0.32;
+  opacity: var(--silhouette-opacity, 0.32);
+  filter: blur(var(--silhouette-blur, 4px));
 }
 
 /* v8.3 基于测量：rational 脸中心比 casual 靠上 1.1% → 下移 1% */
@@ -685,12 +740,15 @@ h3,
     height: 62%;
     max-width: 62%;
   }
-  /* v0.4.2.5：手机端透明度统一克制 0.30，全程剪影感 */
+  /* v0.4.2.5：手机端透明度统一克制 0.30，全程剪影感
+   * v0.7.9.5.5.1：改为 var() 驱动，按轮次渐进 fallback 0.30 */
   .silhouette-img[data-active="true"] {
-    opacity: 0.30;
+    opacity: var(--silhouette-opacity, 0.30);
+    filter: blur(var(--silhouette-blur, 5px));
   }
   .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-    opacity: 0.30;
+    opacity: var(--silhouette-opacity, 0.30);
+    filter: blur(var(--silhouette-blur, 5px));
   }
   .silhouette-img[src*="rational"] {
     transform: translateY(1%) translateZ(0);
@@ -723,12 +781,15 @@ h3,
     height: 84%;
     max-width: 58%;
   }
-  /* v0.4.2.5：平板透明度统一克制 0.32 */
+  /* v0.4.2.5：平板透明度统一克制 0.32
+   * v0.7.9.5.5.1：改为 var() 驱动，按轮次渐进 fallback 0.32 */
   .silhouette-img[data-active="true"] {
-    opacity: 0.32;
+    opacity: var(--silhouette-opacity, 0.32);
+    filter: blur(var(--silhouette-blur, 4px));
   }
   .silhouette-backdrop[data-has-messages="true"] .silhouette-img[data-active="true"] {
-    opacity: 0.32;
+    opacity: var(--silhouette-opacity, 0.32);
+    filter: blur(var(--silhouette-blur, 4px));
   }
   .silhouette-img[src*="rational"] {
     transform: translateY(1%) translateZ(0);

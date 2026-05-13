@@ -8,6 +8,82 @@
 
 ---
 
+## [v0.7.9.5.5.1] - 2026-05-13 — 「视觉微调三件套：模式按钮加强 + 气泡呼吸感 + 人影按轮次显形」
+
+> 用户真机反馈三个 P1 视觉问题，30 分钟一波修复。
+> 不动逻辑，纯视觉优化，0 风险。
+
+### Bug 2 · 模式按钮选中态加强
+
+- `ModeSelector.tsx` 当前档位 `border` → `border-2`、加 `mode-pill-active mode-pill-active-{id}` 双 class
+- 字色字重：`text-white` + `font-semibold tracking-wide`（之前只是 text-white 普通字重）
+- 微浮起：`translateY(-1.5px)`（不再贴底）
+- 顶部 inner highlight 1px 白线（点亮感）
+- 三档差异化 outer glow 加强（之前 28-36px → 现在 32-36px outer + 12-14px inner + inset glow）
+  - casual 粉紫光晕加 12px 内层
+  - rational 玫瑰金光晕加 12px 内层
+  - scathing 暗血红光晕加 14px 内层（最强）
+- 未选中档加 `opacity-80` + hover `-translate-y-0.5`，强化"亮的就是当前档"
+
+### Bug 3 · AI 气泡内边距 +4px
+
+- `MessageBubble.tsx` AI 气泡 `px-5 py-4` → `px-6 py-5`
+- 左右上下各 +4px，视觉呼吸感更强不贴边
+
+### Bug 4 · 人影按 turnCount 渐进显形
+
+- `SilhouetteBackdrop.tsx` 新增 `turnCount?: number` prop
+- 新增两个计算函数：
+  - `calcSilhouetteOpacity`：第 0 轮 0.16 → 第 8+ 轮 0.58（线性递增，max 0.58 保留剪影感）
+  - `calcSilhouetteBlur`：第 0 轮 8px → 第 8+ 轮 1px（线性递减）
+- 通过 inline style 注入 CSS 自定义属性 `--silhouette-opacity` / `--silhouette-blur`
+- `globals.css` 把所有 `.silhouette-img[data-active="true"]` 的 opacity / filter:blur 改为 var() 引用
+- 1.5s `cubic-bezier(0.22, 1, 0.36, 1)` 平滑过渡（不闪不跳）
+- 桌面/手机/平板三套 media query 全部改为 var() 驱动 + 各自 fallback
+- `Chat.tsx` 把 `turnCount` 透传给 SilhouetteBackdrop
+
+### 渐变曲线表
+
+| 轮次 | opacity | blur (px) |
+|---|---|---|
+| 0（未开始）| 0.16 | 8.00 |
+| 1 | 0.21 | 7.13 |
+| 2 | 0.27 | 6.25 |
+| 3 | 0.32 | 5.38 |
+| 4 | 0.37 | 4.50 |
+| 5 | 0.42 | 3.63 |
+| 6 | 0.48 | 2.75 |
+| 7 | 0.53 | 1.88 |
+| 8+ | 0.58 | 1.00 |
+
+### Changed
+
+- `components/ModeSelector.tsx` · 选中态加 `mode-pill-active mode-pill-active-{id}` 双 class + border-2 + 字重升级
+- `components/MessageBubble.tsx` · AI 气泡 padding +4px
+- `components/SilhouetteBackdrop.tsx` · 新增 `turnCount` prop + opacity/blur 计算函数 + inline style 注入 CSS vars
+- `components/Chat.tsx` · 透传 `turnCount` 给 SilhouetteBackdrop
+- `app/globals.css` · 新增 `.mode-pill-active*` 选中态加强样式 + silhouette-img opacity/blur 改为 var() 驱动 + 1.5s 平滑过渡
+
+### 不影响范围
+
+- ✅ v0.7.9.5.0-4 sanitizer 50/50 全 PASS（0 回归）
+- ✅ v0.7.9.5.3 KILL/ABC/引号加粗 0 改动
+- ✅ v0.7.9.6 段落渐入 0 改动
+- ✅ 现有呼吸动画（speaking 时）0 改动（动画绝对值覆盖 var）
+- ✅ 老调用方未传 turnCount 会用 fallback 值（0.32/0.30/0.32），表现与改造前一致
+
+### Bug 1 多轮 ABC + KILL 失效
+
+下一波 v0.7.9.5.5.2 处理。根因已从用户截图定位：
+- LLM 多轮上下文衰减把 ABC 挤回同一行
+- LLM 给了 D 选项但 prompt 只教了 ABC
+- LLM 完全漏写 [KILL] 标记
+- 末段是金句但前端没法识别
+
+修复策略：prompt 多轮强化 + extractOptions 同行连写支持 + ABCD 4 选项支持 + extractKillStamp 第四层金句特征兜底
+
+---
+
 ## [v0.7.9.5.4] - 2026-05-12 — 「专业密度铁律：弹药不是炫技 · 防顾问腔防编造」
 
 > 用户反馈核心痛点：「没深度、不如 Gemini」+ 外部专家方案逐条分析后吸收 80%。

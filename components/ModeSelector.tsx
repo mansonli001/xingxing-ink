@@ -39,11 +39,12 @@ export function ModeSelector({
             }
             className={[
               // v0.4.2.4：手机端按钮放大（py-4.5 + 更紧凑的左右 padding，让标题/副标题清晰可读）
-              "group relative flex items-center gap-2 rounded-lg border px-3 py-4 sm:px-4 sm:py-3.5 transition-all overflow-hidden",
+              // v0.7.9.5.5.1：选中态加强（2px 边 + 字重 + 微浮起 + 更强 outer glow）
+              "group relative flex items-center gap-2 rounded-lg px-3 py-4 sm:px-4 sm:py-3.5 transition-all overflow-hidden",
               active
-                ? `${meta.activeBorder} ${meta.activeBg} ${meta.glowClass}`
-                : "border-xx-border bg-xx-bg-2 hover:border-xx-text-dim",
-              lockedInactive ? "opacity-35 grayscale cursor-not-allowed" : "",
+                ? `mode-pill-active mode-pill-active-${id} border-2 ${meta.activeBorder} ${meta.activeBg} ${meta.glowClass}`
+                : "border border-xx-border bg-xx-bg-2 hover:border-xx-text-dim hover:-translate-y-0.5 opacity-80",
+              lockedInactive ? "opacity-35 grayscale cursor-not-allowed hover:translate-y-0" : "",
               disabled && !lockedInactive ? "cursor-not-allowed opacity-60" : "",
               !btnDisabled ? "cursor-pointer" : "",
             ].join(" ")}
@@ -60,7 +61,7 @@ export function ModeSelector({
                 <span
                   className={[
                     "mode-label",
-                    active ? "text-white" : "text-xx-text",
+                    active ? "text-white font-semibold tracking-wide" : "text-xx-text",
                   ].join(" ")}
                 >
                   {meta.label}

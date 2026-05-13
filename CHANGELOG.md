@@ -8,6 +8,65 @@
 
 ---
 
+## [v0.7.9.7.3] - 2026-05-13 — 「OG 中文字体 + 弹窗修复三件套」
+
+> 用户手机真机截图暴露：
+> 1. OG 图三档胶囊中文还是渲染成 ☒ tofu 方块
+> 2. 弹窗手机端显示不全（底部被裁）
+> 3. 弹窗点遮罩无法取消（只能 ESC，移动端无 ESC 键 = 关不掉）
+> 4. 二维码长按没系统菜单
+
+### Bug 1 · OG 图中文 tofu 修复
+
+- **根因**：satori（next/og 底层）默认只内置 Inter 拉丁字符，中文字符无字体可用 → fallback 到方框
+- **修复**：`app/og/route.tsx` 新增 `loadFonts()` 异步加载 Noto Sans SC（weight 400/700）
+  - 字体源：jsdelivr CDN 镜像的 fontsource `@fontsource/noto-sans-sc@5.0.5`（chinese-simplified 子集 · woff 格式）
+  - 通过 `ImageResponse({ fonts: [...] })` 传入
+  - 失败时 catch 打 console.error，降级不加载（至少英文能渲染）
+- **OG 紧凑度微调**：主标 180→160 / 钩子 50→48 / 引文 48→44 / padding 60px→60-100px / 底部距底 32→50
+
+### Bug 2+3 · ShareQRDialog 弹窗修复
+
+- **点遮罩关闭**（桌面 ESC / 移动端无 ESC 关不掉）：
+  - 旧：`onClick` + `e.target === e.currentTarget` 判定 —— 移动端 touch 不触发 onClick
+  - 新：overlay 加 `data-overlay="true"` 属性 + 同时监听 `onClick` / `onTouchEnd` 双事件
+  - 判定改为 `target.dataset.overlay === "true"` 精确匹配
+- **弹窗手机端显示不全**：
+  - overlay 加 `min-height: 100dvh`（iOS Safari 100vh 地址栏遮挡兜底）
+  - card 加 `max-height: calc(100dvh - 32px)` + `overflow-y: auto` 内部可滚
+- **body 滚动锁定**：弹窗打开时 `document.body.style.overflow = "hidden"`，关闭时恢复
+- **文案再收敛**：描述从「截屏发给朋友，让 ta 也来被姐怼一下」改为「长按二维码保存 · 或让朋友扫码」（引导动作）
+
+### Bug 4 · 二维码长按原生菜单解锁
+
+- `<img className="wx-qr-svg" draggable>` + CSS 显式：
+  - `-webkit-touch-callout: default !important`（之前全局 .no-select 可能阻断）
+  - `-webkit-user-select: auto` / `user-select: auto`
+  - `pointer-events: auto`
+  - `cursor: pointer`
+- iOS Safari / 微信 webview 长按 → 系统菜单（保存图片 / 拷贝 / 分享）
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 + v07955 killabc 23/23（全部 0 回归）
+- 本地 next start 实测 4 张 OG 全部 200 + PNG 生成（字体 woff 在 satori 1.0+ 兼容）
+- 字体 CDN `cdn.jsdelivr.net` 验证 HTTP 200（access-control-allow-origin: *）
+
+### 待用户验证（手机端）
+
+1. 扫码/访问 `https://xingxing.starfluxes.com/og?mode=scathing` → 「别哭，姐还没开始扇」中文应清晰显示（不再是 ☒）
+2. 手机端点右上角小图标 → 弹窗 → 点弹窗外黑色区域 → 应该能关闭
+3. 长按二维码 → iOS 应弹「保存到照片」「复制」「分享」系统菜单
+4. 弹窗底部「复制链接」「关闭」按钮应清晰可见（不溢出 viewport）
+
+### 不影响范围
+
+- ✅ v0.7.9.7 SSR 壳 / HeroFallback / v0.7.9.7.1+7.2 钩子升级 / 微信引导重构 0 改动
+- ✅ v0.7.9.5/6 全部 0 回归
+
+---
+
 ## [v0.7.9.7.2] - 2026-05-13 — 「微信引导重构 + OG 图 v2 紧凑版」
 
 > 用户真机反馈两个 P0：

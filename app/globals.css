@@ -1874,11 +1874,12 @@ body[data-hydrated="true"] .hero-fallback {
   }
 }
 
-/* QR 弹窗 */
+/* QR 弹窗 · v0.7.9.7.3 · 点遮罩关闭 + 100dvh 兜底 + 长按图片原生菜单 */
 .wx-qr-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
+  min-height: 100dvh; /* iOS Safari 100vh 被地址栏遮挡时兜底 */
   background: rgba(20, 16, 26, 0.85);
   backdrop-filter: blur(8px);
   display: flex;
@@ -1886,30 +1887,37 @@ body[data-hydrated="true"] .hero-fallback {
   justify-content: center;
   padding: 16px;
   animation: wx-qr-overlay-fade 0.25s ease both;
+  cursor: pointer; /* 表明点击可关闭 */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .wx-qr-card {
   background: linear-gradient(180deg, #1f1929 0%, #14101a 100%);
   border: 1px solid rgba(232, 180, 184, 0.25);
   border-radius: 16px;
-  padding: 24px 24px 20px;
+  padding: 26px 24px 22px;
   max-width: 320px;
   width: 100%;
+  max-height: calc(100dvh - 32px); /* 手机端不会溢出 */
+  overflow-y: auto;
   text-align: center;
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.7),
     0 0 32px -8px rgba(232, 180, 184, 0.2);
   animation: wx-qr-card-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
   font-family: "PingFang SC", "Noto Serif SC", serif;
   color: #f0f0ff;
+  cursor: default; /* 卡片内恢复默认指针 */
 }
 .wx-qr-title {
   font-family: "Noto Serif SC", serif;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   color: #d4af7a;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
 }
 .wx-qr-desc {
-  font-size: 12px;
+  font-size: 12.5px;
   color: #A9A8C0;
   margin-bottom: 16px;
   line-height: 1.55;
@@ -1922,6 +1930,12 @@ body[data-hydrated="true"] .hero-fallback {
   padding: 12px;
   width: 200px;
   height: 200px;
+  /* v0.7.9.7.3：解锁长按原生菜单（保存图片 / 分享 / 复制） */
+  -webkit-touch-callout: default !important;
+  -webkit-user-select: auto;
+  user-select: auto;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .wx-qr-url {
   font-size: 11.5px;

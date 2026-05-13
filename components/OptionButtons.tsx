@@ -33,23 +33,31 @@ interface OptionButtonsProps {
 /**
  * 从一段文本中提取 ABCD 选项
  *
- * 支持的格式：
- *   - "A. xxx\nB. xxx\nC. xxx" （标准）
- *   - "A、xxx\nB、xxx" （中文顿号）
- *   - "A xxx\nB xxx" （仅大写字母 + 空格 - 罕见）
+ * v0.7.9.5.5.2 升级：双策略容错（先按行扫，失败则按"全段同行连写"切分）
  *
- * 不支持（拒绝识别）：
- *   - 同一行连写多个 "A. xxx B. xxx"（LLM 已被 prompt 要求换行，命中率会高）
- *   - 中间嵌入大写字母后跟句号的（"3.A.B.C 已被淘汰"）
+ * 策略 1（标准）· 按行扫描：
+ *   - "A. xxx\nB. xxx\nC. xxx" （标准换行格式）
+ *   - "A、xxx\nB、xxx" （中文顿号）
+ *
+ * 策略 2（兜底 v0.7.9.5.5.2）· 同行连写正则切：
+ *   - "A. xxx B. xxx C. xxx D. xxx"（LLM 多轮上下文衰减把 ABCD 挤回同一段）
+ *   - 用 lookahead 边界 (?=\s+[A-D][.．、]|$) 切分
+ *
+ * 支持范围：
+ *   - 选项字母 A-D（v0.7.9.5.5.2 新增 D 选项支持）
+ *   - 必须按 A→B→C(→D) 顺序连续
+ *   - 每个选项文本 ≥ 8 字符
+ *   - ≥2 个才算命中
  *
  * @param paragraph 单段文本
  * @returns 提取到的选项数组（不足 2 个返回空数组 → 视为未命中）
  */
 export function extractOptions(paragraph: string): ParsedOption[] {
   if (!paragraph) return [];
-  const lines = paragraph.split("\n");
 
-  const options: ParsedOption[] = [];
+  // ===== 策略 1：按行扫描（标准格式）=====
+  const lines = paragraph.split("\n");
+  const lineOptions: ParsedOption[] = [];
   let currentLetter: string | null = null;
   let currentText: string[] = [];
 
@@ -59,37 +67,70 @@ export function extractOptions(paragraph: string): ParsedOption[] {
     // 行首字母 A-D + . 或 、 + 至少 1 个字符
     const m = trimmed.match(/^([A-D])[.．、][\s　]*(.+)$/);
     if (m) {
-      // flush 上一个
       if (currentLetter) {
         const t = currentText.join(" ").trim();
         if (t.length >= 8) {
-          options.push({ letter: currentLetter, text: t });
+          lineOptions.push({ letter: currentLetter, text: t });
         }
       }
       currentLetter = m[1];
       currentText = [m[2]];
     } else if (currentLetter) {
-      // 续行：拼到当前选项
       currentText.push(trimmed);
     }
   }
-  // flush 最后一个
   if (currentLetter) {
     const t = currentText.join(" ").trim();
     if (t.length >= 8) {
-      options.push({ letter: currentLetter, text: t });
+      lineOptions.push({ letter: currentLetter, text: t });
     }
   }
 
-  // ≥2 个才算命中
-  if (options.length < 2) return [];
+  // 策略 1 命中 ≥2 且字母连续 → 返回
+  const validated1 = validateContinuous(lineOptions);
+  if (validated1.length >= 2) return validated1;
 
-  // 选项字母必须按 A/B/C 顺序连续（A→B→C 合法，A→C 不合法）
+  // ===== 策略 2（v0.7.9.5.5.2 兜底）：同行连写正则切 =====
+  // 把整段文本当成一行处理，用 lookahead 在每个 "[空白+A-D+.／、]" 前断开
+  // 例：" A. 卖会员……比如19.9一个月。 B. 卖广告/带货……佣金。 C. 卖课程……陪伴。 D. 我还没想清楚……"
+  const flatText = paragraph.replace(/\s+/g, " ").trim();
+  // 必须有 ≥2 个 ABCD 标记才进入策略 2（避免误伤普通段落里偶现的 "A."）
+  const markerCount = (flatText.match(/(?:^|\s)([A-D])[.．、]\s+/g) || []).length;
+  if (markerCount < 2) return [];
+
+  // 切分点：每个 (^|空白)[A-D][.／、] 前
+  // 用全局正则配合 split + map
+  const segOptions: ParsedOption[] = [];
+  // 在每个标记前插入分隔符 \u0001，再 split
+  const marked = flatText.replace(
+    /(^|\s)([A-D])[.．、]\s*/g,
+    "\u0001$2|"
+  );
+  const chunks = marked.split("\u0001").filter(Boolean);
+  for (const chunk of chunks) {
+    const m = chunk.match(/^([A-D])\|(.+)$/);
+    if (!m) continue;
+    const letter = m[1];
+    let text = m[2].trim();
+    // 截掉末尾可能带过来的下一段废话（比如 KILL 段已经在 MessageBubble 剥过，这里不再处理）
+    if (text.length >= 8) {
+      segOptions.push({ letter, text });
+    }
+  }
+
+  return validateContinuous(segOptions);
+}
+
+/**
+ * 校验选项字母按 A→B→C(→D) 顺序连续
+ * 不连续返回空数组，连续返回原数组
+ */
+function validateContinuous(options: ParsedOption[]): ParsedOption[] {
+  if (options.length < 2) return [];
   for (let i = 0; i < options.length; i++) {
     const expected = String.fromCharCode("A".charCodeAt(0) + i);
     if (options[i].letter !== expected) return [];
   }
-
   return options;
 }
 

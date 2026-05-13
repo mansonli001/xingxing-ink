@@ -35,7 +35,12 @@ export function ShareButton({ className = "" }: ShareButtonProps) {
       <button
         type="button"
         className={`share-btn ${className}`}
-        onClick={() => setOpen(true)}
+        onClick={(e) => {
+          // v0.7.9.7.5：阻止 click 冒泡，防止弹窗渲染后该 click 被 overlay 捕获 → 立刻关闭
+          e.stopPropagation();
+          e.preventDefault();
+          setOpen(true);
+        }}
         aria-label="扫码分享给朋友"
         title="扫码分享"
       >

@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * v0.7.9.7.3 · 分享二维码弹窗
+ * v0.7.9.7.5 · 分享二维码弹窗 · 终极修复版
  *
- * v2 → v3 修复：
- *   1. 手机端点遮罩无法关闭 → 同时监听 onPointerDown / onClick 双兜底
- *   2. 桌面端也只能 ESC 关闭 → onClick 事件在某些嵌套下 e.target 判断失败，改用 data-overlay 属性精准匹配
- *   3. 二维码长按无系统菜单 → 移除可能阻断原生菜单的 pointer-events/user-select，加 draggable="true" 允许长按
- *   4. 手机端显示不全 → 外层用 100dvh 兜底 + 卡片 max-height 限制 + overflow-auto
+ * v3/v4 bug：点 ShareButton 弹窗立刻被关掉（桌面 + 手机都有）
+ *   根因：ShareButton click → setOpen(true) → 弹窗渲染 → 同一次 click 继续冒泡
+ *         → overlay 的 click 被触发 → onClose() 立刻执行
+ *         虽然 ShareButton 已加 stopPropagation，但 React 合成事件 + 某些浏览器
+ *         行为下仍可能发生首帧误触
  *
- * 文案（v3 文案再收敛，更直接）：
- *   - 标题：扫码分享给朋友
- *   - 描述：长按二维码保存 · 或扫码发给朋友
+ * v5 终极修复：
+ *   1. 用 onPointerDown 代替 onClick（pointer 事件 pointerId 可精确匹配 down/up 配对）
+ *   2. 100ms 激活延迟：弹窗打开后前 100ms 不响应遮罩关闭（让首帧冒泡事件过去）
+ *   3. Pointer down on overlay → 记录 pointerId → pointer up 时验证是同一个 pointerId
+ *      且没 move 过（避免滑动误触）
+ *   4. 保留 ESC 键和关闭按钮兜底
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface ShareQRDialogProps {
   open: boolean;
@@ -29,22 +32,36 @@ function buildQrUrl(targetUrl: string): string {
 export function ShareQRDialog({ open, onClose }: ShareQRDialogProps) {
   const [currentUrl, setCurrentUrl] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  // v0.7.9.7.5：弹窗是否已过"冷却期"可响应遮罩关闭
+  const [readyToClose, setReadyToClose] = useState(false);
+  // pointerdown 发生在 overlay 上的 pointerId，pointerup 必须匹配才算真正点了遮罩
+  const pointerDownOnOverlayRef = useRef<number | null>(null);
 
+  // 弹窗打开时读取 URL + 启动 100ms 冷却期
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setReadyToClose(false);
+      pointerDownOnOverlayRef.current = null;
+      return;
+    }
     if (typeof window !== "undefined") {
       const siteUrl =
         process.env.NEXT_PUBLIC_SITE_URL || "https://xingxing.starfluxes.com";
       setCurrentUrl(siteUrl);
     }
+    // 100ms 后才允许遮罩关闭（防首帧冒泡误触）
+    const timer = setTimeout(() => setReadyToClose(true), 120);
+    return () => clearTimeout(timer);
   }, [open]);
 
+  // toast 自动消失
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2200);
     return () => clearTimeout(timer);
   }, [toast]);
 
+  // ESC 键关闭
   useEffect(() => {
     if (!open) return;
     function handleEsc(e: KeyboardEvent) {
@@ -54,7 +71,7 @@ export function ShareQRDialog({ open, onClose }: ShareQRDialogProps) {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [open, onClose]);
 
-  // v0.7.9.7.3：body 滚动锁定，防止弹窗打开时背景滚动
+  // body 滚动锁定
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -78,11 +95,33 @@ export function ShareQRDialog({ open, onClose }: ShareQRDialogProps) {
     setToast(ok ? "链接已复制 · 发给朋友吧" : "复制失败 · 长按链接选择");
   }
 
-  // v0.7.9.7.3 · 点遮罩关闭（双事件兜底 · 桌面+移动端都 work）
-  // 用 data-overlay 属性判定：只有点到遮罩层本身才关闭，点卡片内不关
-  function handleOverlayTap(e: React.SyntheticEvent<HTMLDivElement>) {
+  /**
+   * v0.7.9.7.5 · 遮罩关闭逻辑（pointerdown + pointerup 配对）
+   *
+   * 步骤：
+   *   1. pointerdown 落在 overlay 上 → 记录 pointerId
+   *   2. pointerup 时：pointerId 匹配 + 目标还是 overlay = 真点遮罩 → 关闭
+   *   3. 如果 pointerdown 落在卡片上 → 不记录 → pointerup 不会触发关闭
+   *   4. 如果按住在 overlay 滑到卡片再松开 → pointerId 匹配但 target ≠ overlay → 不关
+   */
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!readyToClose) return; // 冷却期不响应
     const target = e.target as HTMLElement;
     if (target.dataset.overlay === "true") {
+      pointerDownOnOverlayRef.current = e.pointerId;
+    }
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!readyToClose) {
+      pointerDownOnOverlayRef.current = null;
+      return;
+    }
+    const target = e.target as HTMLElement;
+    const started = pointerDownOnOverlayRef.current;
+    pointerDownOnOverlayRef.current = null;
+    // down 和 up 都在 overlay 上 → 真点遮罩 → 关闭
+    if (started === e.pointerId && target.dataset.overlay === "true") {
       onClose();
     }
   }
@@ -95,8 +134,8 @@ export function ShareQRDialog({ open, onClose }: ShareQRDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-label="扫码分享给朋友"
-        onClick={handleOverlayTap}
-        onTouchEnd={handleOverlayTap}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
       >
         <div className="wx-qr-card">
           <div className="wx-qr-title">扫码分享给朋友</div>
@@ -110,8 +149,6 @@ export function ShareQRDialog({ open, onClose }: ShareQRDialogProps) {
               alt="醒醒分享二维码"
               width={200}
               height={200}
-              // v0.7.9.7.3：解锁长按系统菜单
-              // draggable=true + 无 pointer-events 阻断 → 移动端长按弹"保存图片/分享/复制"
               draggable
             />
           ) : null}

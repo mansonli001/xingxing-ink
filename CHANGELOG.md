@@ -8,6 +8,85 @@
 
 ---
 
+## [v0.7.9.7.6] - 2026-05-14 — 「ShareButton 真正贴到输入框右上角」
+
+> 用户截图证据（桌面 Chrome）：分享小图标**漂浮在屏幕主区右下空白处**，不在输入框附近。
+> 用户："没看到二维码小图标 / 输入框上方/右侧是空的"。
+
+### 根因
+
+`.share-btn-corner` 旧定位 `position: absolute; top: -38px; right: 4px`，锚到 `.input-safe-zone`，但 safe-zone 上方就是消息流容器底沿——按钮被弹到主区右下空白处，跟输入框完全脱离。
+
+### Changed
+
+- **`components/Chat.tsx`** · ShareButton DOM 重定位
+  - 从 `.input-safe-zone` 子级 → 移入 `.input-mode-focus`（圆角矩形输入框）内部最末尾
+  - `.input-safe-zone` 删 `relative`，`.input-mode-focus` 加 `relative`（重新锚点）
+  - textarea className 加 `pr-9`（让出 36px 内边距，避免文字被图标遮挡）
+- **`app/globals.css`**
+  - `.share-btn` 尺寸 `32×32` → `28×28`（更克制）
+  - `.share-btn svg` 显式 `18×18`（防止 svg 跟随父尺寸缩放问题）
+  - `.share-btn-corner` 定位 `top:-38px/right:4px` → `top:6px/right:6px`（钉到圆角矩形内部右上角）
+  - 移动端：`.share-btn` 26×26 / svg 16×16 / corner top:5px/right:5px
+  - 删除 v0.7.9.7.2 遗留的重复样式块
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 + v07955 killabc 23/23（全部 0 回归）
+
+### 不影响范围
+
+- ✅ ShareButton.tsx / ShareQRDialog.tsx 0 改动（v0.7.9.7.5 修复保留）
+- ✅ OG 图相关 0 改动（字体 tofu / 横线下个版本处理）
+- ✅ v0.7.9.5/6/7/7.1-5 全部 0 回归
+
+---
+
+## [v0.7.9.7.5] - 2026-05-13 — 「弹窗点二维码立刻消失终极修复」
+
+> 用户报：「点 ShareButton 弹窗秒关，桌面 + 手机都发生」。
+
+### 根因
+
+ShareButton click → setOpen(true) → 弹窗渲染 → 同一次 click 继续冒泡到 overlay → overlay onClick 触发 onClose → 弹窗立刻关闭。
+
+### Changed
+
+- **`components/ShareButton.tsx`** · onClick 加 `stopPropagation + preventDefault` 阻止 click 冒泡
+- **`components/ShareQRDialog.tsx`** · 重写关闭逻辑
+  - 用 `onPointerDown` + `onPointerUp` 替代 `onClick`（pointerId 精确配对）
+  - 必须 down 和 up 都在 overlay 上 + 同一 pointerId 才算真点遮罩
+  - 按住 overlay 滑到卡片再松开 → 不关（防误触）
+- **120ms 冷却期**：弹窗打开后前 120ms 不响应遮罩关闭
+  - 通过 `readyToClose` useState + setTimeout 实现
+  - 让首帧冒泡事件自然走完，不会误触
+- 保留兜底：ESC 键 + 关闭按钮 两种稳妥关闭方式
+
+### 验证
+
+- tsc ✓ / build ✓ / v0795 50/50（0 回归）
+
+---
+
+## [v0.7.9.7.4] - 2026-05-13 — 「手机弹窗真正适配 · QR 图 200→140-160 自适应」
+
+> 用户截图：v0.7.9.7.3 已上线但矮屏下 QR 200×200 仍溢出。
+
+### Changed
+
+- **`app/globals.css`**
+  - `.wx-qr-card` max-height 从 `calc(100dvh - 32px)` 改为 `min(calc(100vh - 32px), 640px)` 兼容不支持 dvh 的设备
+  - 新增 `@media (max-width: 499px)`：QR 160×160 / 卡片 padding 减 / 字号减
+  - 新增 `@media (max-height: 700px) and (max-width: 499px)`：QR 140×140 / padding 再减
+  - 矮屏（iPhone SE/8/微信 webview）不再溢出
+
+### 验证
+
+- next build ✓ / v0795 50/50（0 回归）
+
+---
+
 ## [v0.7.9.7.3] - 2026-05-13 — 「OG 中文字体 + 弹窗修复三件套」
 
 > 用户手机真机截图暴露：

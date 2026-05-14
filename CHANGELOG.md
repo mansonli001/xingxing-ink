@@ -8,6 +8,64 @@
 
 ---
 
+## [v0.7.9.7.7] - 2026-05-14 — 「ShareButton 挪 Header + OG 删横线」
+
+> 用户反馈 v0.7.9.7.6：分享按钮还是弹不出来。决策：放弃输入框区域，挪到 Header 永远固定在视野。
+> 同时收尾 OG 图：删底部签名横线，签名两侧对齐保留。
+
+### Changed · ShareButton 挪到 Header（方案 B）
+
+- **`app/HomeClient.tsx`**
+  - 引入 `<ShareButton />`
+  - Header 右上角 `LOADING IN PROGRESS` 之前挂上 ShareButton（flex gap 对齐）
+  - 用一个 `<div className="flex items-center gap-2 sm:gap-3 shrink-0">` 包住 ShareButton + Loading 签名
+- **`components/Chat.tsx`**
+  - 删 ShareButton import
+  - 删 input-mode-focus 内的 ShareButton JSX
+  - textarea 删 `pr-9` 内边距（不再需要让出空间）
+  - input-mode-focus 删 `relative`（不再需要做绝对定位锚点）
+- **`app/globals.css`**
+  - 删 `.share-btn-corner` 整段 + 移动端 corner 定位 media
+  - 保留 `.share-btn` 基础样式（Header 仍在用）
+  - 移动端 media 只保留 `.share-btn` 26×26 / svg 16×16
+
+### Changed · OG 图删底部横线
+
+- **`app/og/route.tsx`**
+  - 删除底部「Loading in Progress」上方的水平渐变线（line 282-289）
+  - 简化外层包装 div：从「flex column + gap 10」嵌套两个 div → 直接 flex row + space-between
+  - 「Loading in Progress」+「xingxing.starfluxes.com」两侧对齐，更克制
+
+### 修复效果
+
+- ✅ ShareButton 永远固定在 Header 右上角（不会漂浮、不会因输入框位置变化而失踪）
+- ✅ 桌面/移动端尺寸自适应（28×28 / 26×26）
+- ✅ 输入框区域恢复纯净（专心输入和发送，不被分享图标打扰）
+- ✅ OG 图底部更简洁（无横线，签名两侧对齐）
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- v0795 sanitizer 50/50 + v07955 killabc 23/23（全部 0 回归）
+
+### 不影响范围
+
+- ✅ ShareButton.tsx onClick 防冒泡逻辑（v0.7.9.7.5）保留
+- ✅ ShareQRDialog.tsx pointerId + 120ms 冷却 + 100dvh 自适应（v0.7.9.7.5）保留
+- ✅ OG 图主体（醒醒大字 / 引文 / 三档胶囊 / 主题色）0 改动
+- ✅ HeroFallback / Chat / 抽屉 / 其他组件 0 改动
+- ✅ v0.7.9.5/6/7/7.1-6 全部 0 回归
+
+### 待用户验证
+
+1. 硬刷 `https://xingxing.starfluxes.com?v=20260514_77` 桌面 Chrome
+2. Header 右上角「LOADING IN PROGRESS」**左侧** → 看到 28×28 二维码细线小图标
+3. 点击 → 弹窗稳定弹出
+4. 手机端硬刷 → 26×26 自适应
+5. 微信里发链接 → OG 图无横线，底部签名两侧对齐
+
+---
+
 ## [v0.7.9.7.6] - 2026-05-14 — 「ShareButton 真正贴到输入框右上角」
 
 > 用户截图证据（桌面 Chrome）：分享小图标**漂浮在屏幕主区右下空白处**，不在输入框附近。

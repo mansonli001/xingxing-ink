@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChatShell } from "@/components/ChatShell";
 import { WakeUpIntro } from "@/components/WakeUpIntro";
+import { ShareButton } from "@/components/ShareButton";
 
 /**
  * v0.7.9.7 · HomeClient · 客户端交互逻辑
@@ -66,12 +67,16 @@ export function HomeClient() {
             · 别做梦了
           </span>
         </div>
-        <span
-          className="text-[10px] sm:text-[11px] text-xx-text-dim tracking-[0.2em] sm:tracking-[0.35em] font-display font-semibold shrink-0 select-none"
-          aria-label="Loading in Progress"
-        >
-          LOADING IN PROGRESS
-        </span>
+        {/* v0.7.9.7.7：ShareButton 挪到 Header 右上角（永远固定在视野），点击弹二维码弹窗 */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <ShareButton />
+          <span
+            className="text-[10px] sm:text-[11px] text-xx-text-dim tracking-[0.2em] sm:tracking-[0.35em] font-display font-semibold select-none"
+            aria-label="Loading in Progress"
+          >
+            LOADING IN PROGRESS
+          </span>
+        </div>
       </header>
       <div className="flex-1 overflow-hidden">
         <ChatShell />

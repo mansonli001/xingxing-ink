@@ -266,7 +266,7 @@ export async function GET(request: Request) {
           </div>
         </div>
 
-        {/* 底部签名横线（绝对定位，距底 50px） */}
+        {/* 底部签名（v0.7.9.7.7：删除分隔横线，留品牌签名 + 域名两侧对齐） */}
         <div
           style={{
             position: "absolute",
@@ -274,27 +274,10 @@ export async function GET(request: Request) {
             left: 100,
             right: 100,
             display: "flex",
-            flexDirection: "column",
+            justifyContent: "space-between",
             alignItems: "center",
-            gap: 10,
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              height: 1,
-              background: `linear-gradient(90deg, transparent 0%, rgba(232, 180, 184, 0.3) 50%, transparent 100%)`,
-              display: "flex",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              width: "100%",
-              alignItems: "center",
-            }}
-          >
             <div
               style={{
                 fontSize: 17,
@@ -317,7 +300,6 @@ export async function GET(request: Request) {
             >
               xingxing.starfluxes.com
             </div>
-          </div>
         </div>
       </div>
     ),

@@ -13,7 +13,6 @@ import { MicInput } from "./MicInput";
 import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 import { DrawerTriggerButton } from "./SideDrawer";
-import { ShareButton } from "./ShareButton";
 
 interface ChatProps {
   mode: ModeId;
@@ -208,9 +207,8 @@ export function Chat({
           className="input-safe-zone w-full"
           data-has-messages={messages.length > 0 ? "true" : "false"}
         >
-          {/* v0.7.9.7.6：分享按钮真正内嵌输入框右上角内部（input-mode-focus 内绝对定位，
-              永远贴着圆角矩形边沿，不再漂浮在主区） */}
-          <div className="input-mode-focus relative flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 transition-colors">
+          {/* v0.7.9.7.7：ShareButton 已挪到 Header 右上角，输入框区域恢复纯净 */}
+          <div className="input-mode-focus flex items-end gap-2 rounded-xl border border-xx-border bg-xx-bg-2 px-3 py-2.5 transition-colors">
             <MicInput
               disabled={streaming}
               onTranscript={(text) => {
@@ -246,7 +244,7 @@ export function Chat({
                  会在聚焦时自动放大整个页面，输入完无法缩回
                  font-size 用内联 style 强覆盖，保证不被任何规则压低 */
               style={{ fontSize: "16px" }}
-              className="flex-1 resize-none bg-transparent text-xx-text placeholder:text-xx-text-dim outline-none max-h-40 leading-relaxed pr-9"
+              className="flex-1 resize-none bg-transparent text-xx-text placeholder:text-xx-text-dim outline-none max-h-40 leading-relaxed"
             />
             <button
               type="button"
@@ -261,8 +259,6 @@ export function Chat({
             >
               {streaming ? "醒醒说话中…" : "送上去"}
             </button>
-            {/* v0.7.9.7.6：分享小图标钉到输入框圆角矩形右上角内部 */}
-            <ShareButton className="share-btn-corner" />
           </div>
           <p
             className={[

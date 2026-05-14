@@ -1860,18 +1860,8 @@ body[data-hydrated="true"] .hero-fallback {
   outline: 2px solid rgba(232, 180, 184, 0.5);
   outline-offset: 2px;
 }
-/* v0.7.9.7.6：钉到输入框圆角矩形（.input-mode-focus）右上角内部，永远跟随输入框 */
-.share-btn-corner {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 5;
-}
+/* v0.7.9.7.7：ShareButton 已挪到 Header，原 .share-btn-corner 绝对定位逻辑已删除 */
 @media (max-width: 499px) {
-  .share-btn-corner {
-    top: 5px;
-    right: 5px;
-  }
   .share-btn {
     width: 26px;
     height: 26px;

@@ -8,6 +8,68 @@
 
 ---
 
+## [v0.7.9.7.8] - 2026-05-14 — 「安全 P0 · Chat Stream 限流 + 基础响应头」
+
+> 上线前堵两个最实在的口子：① 别人爆刷烧我 DeepSeek 的钱 ② 站点被 iframe 钓鱼 / XSS 嵌入。
+> 零新依赖、零回归、外科手术式补丁。
+
+### Added · Chat Stream 双维度内存限流
+
+- **`lib/security/rate-limit.ts`**（新增）
+  - 设计模式与 `lib/stats/admin-auth.ts` 对齐（同一份 `getClientIp`、同款 Map + GC）
+  - **IP 维度**：30 次/小时（覆盖正常 5-6 轮对话还有 5 倍富余，但挡住爆破）
+  - **sessionId 维度**：200 条/天（极端长聊也够，但封堵无限重发）
+  - 自动 GC 过期 bucket（保留近 2 小时 / 近 2 天），防内存泄漏
+  - Edge runtime 兼容，不依赖 node:crypto
+  - 导出 `__resetForTest__` / `__peekIpHourCount__` 供后续监控/测试
+
+### Changed · Chat Stream API 接入限流
+
+- **`app/api/chat/stream/route.ts`**
+  - 引入 `checkChatRateLimit`，body 解析 + 长度校验之后立即检查
+  - 触发后返回 `HTTP 429` + `Retry-After` header + 友好 JSON：
+    - IP 维触发：「醒醒喝口水。同一 IP 每小时最多 30 次，过会儿再来怼。」
+    - SID 维触发：「今天聊得够多了，明天再来 ☕️」
+
+### Added · 基础安全响应头（全站）
+
+- **`next.config.js`**
+  - 新增 `headers()` 函数，全站统一注入 5 条响应头：
+    - `Content-Security-Policy`：白名单已基于子 agent 全项目扫描精确锁定
+      - script-src：`'self' 'unsafe-inline'` + `va.vercel-scripts.com`
+      - style-src：`'self' 'unsafe-inline'` + Google Fonts + jsDelivr 霞鹜文楷
+      - font-src：`'self'` + `fonts.gstatic.com` + `cdn.jsdelivr.net`
+      - img-src：`'self' data: blob:` + `api.qrserver.com`（二维码）
+      - media-src：`'self' blob:`（TTS 音频）
+      - connect-src：`'self'` + Vercel Analytics 兜底域
+      - `frame-ancestors 'none'`、`object-src 'none'`、`upgrade-insecure-requests`
+    - `X-Frame-Options: DENY`（双保险，老浏览器兼容）
+    - `X-Content-Type-Options: nosniff`
+    - `Referrer-Policy: strict-origin-when-cross-origin`
+    - `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()`
+- DeepSeek / 火山 TTS / ElevenLabs 都是服务端调用，浏览器不直连，**故意不放行 connect-src**，进一步收口
+
+### 不影响范围
+
+- ✅ ShareButton（v0.7.9.7.7 已闭环）
+- ✅ OG 图（v0.7.9.7.7 已闭环）
+- ✅ 后台 `/admin` 4 层鉴权（独立链路，不动）
+- ✅ Upstash KV / 数据面板 / 统计 fire-and-forget（不动）
+- ✅ Hero / Chat / 抽屉 / 醒醒方法论矩阵（不动）
+
+### 验证
+
+- tsc 0 错 / next build ✓ / 0 lint
+- 全部 5 条静态/动态路由编译正常
+
+### 部署后自验（生产）
+
+- `curl -X POST https://xingxing.starfluxes.com/api/chat/stream` 同 IP 连刷 35 次，第 31 次起预期 429 + `Retry-After`
+- 浏览器 Network 面板任意请求，响应头应包含 `Content-Security-Policy` / `X-Frame-Options: DENY`
+- DevTools Console 不应有 CSP violation 报错（如有，按报错域名补白名单）
+
+---
+
 ## [v0.7.9.7.7] - 2026-05-14 — 「ShareButton 挪 Header + OG 删横线」
 
 > 用户反馈 v0.7.9.7.6：分享按钮还是弹不出来。决策：放弃输入框区域，挪到 Header 永远固定在视野。

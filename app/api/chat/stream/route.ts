@@ -3,6 +3,7 @@ import { streamChat, type ChatMessage } from "@/lib/deepseek";
 import { getMode, buildSystemPrompt, MODES, type ModeId } from "@/lib/prompts";
 import { sanitizeLLMOutput, sanitizeStreamSegments } from "@/lib/prompts/sanitizer";
 import { countDistinctQHit } from "@/lib/prompts/q_picker";
+import { checkChatRateLimit } from "@/lib/security/rate-limit";
 import {
   appendMessage,
   getOrCreateSession,
@@ -39,6 +40,30 @@ export async function POST(req: NextRequest) {
     return new Response(
       JSON.stringify({ error: "单次输入不要超过 4000 字" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // v0.7.9.7.8 安全 P0：双维度限流（IP 30/h + sessionId 200/d）
+  // 触发后返回 429 + Retry-After，前端自行降级提示
+  const rl = checkChatRateLimit(req, body.session_id);
+  if (!rl.ok) {
+    const friendly =
+      rl.reason === "ip_hour_exceeded"
+        ? "醒醒喝口水。同一 IP 每小时最多 30 次，过会儿再来怼。"
+        : "今天聊得够多了，明天再来 ☕️";
+    return new Response(
+      JSON.stringify({
+        error: friendly,
+        reason: rl.reason,
+        retryAfterSeconds: rl.retryAfterSeconds,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rl.retryAfterSeconds),
+        },
+      }
     );
   }
 

@@ -16,6 +16,7 @@ import {
   K_MODE_SCATHING,
   K_ONLINE_PATTERN,
   K_MAX_ROUNDS,
+  K_TOTAL_BP_COUNT,
 } from "@/lib/stats/keys";
 
 export const runtime = "edge";
@@ -27,6 +28,7 @@ export type StatsSummary = {
   totalRounds: number;
   onlineNow: number;
   maxRounds: number;
+  totalBpCount: number;
   modeDist: {
     casual: number;
     rational: number;
@@ -51,6 +53,7 @@ export async function GET() {
       casual,
       rational,
       scathing,
+      totalBpCountRaw,
     ] = await Promise.all([
       kv.scard(K_VISITORS_SET).catch(() => 0),
       kv.get<string | number>(K_TOTAL_ROUNDS).catch(() => 0),
@@ -59,6 +62,7 @@ export async function GET() {
       kv.get<string | number>(K_MODE_CASUAL).catch(() => 0),
       kv.get<string | number>(K_MODE_RATIONAL).catch(() => 0),
       kv.get<string | number>(K_MODE_SCATHING).catch(() => 0),
+      kv.get<string | number>(K_TOTAL_BP_COUNT).catch(() => 0),
     ]);
 
     const c = Number(casual ?? 0);
@@ -71,6 +75,7 @@ export async function GET() {
       totalRounds: Number(totalRounds ?? 0),
       onlineNow: onlineKeys.length,
       maxRounds: Number(maxRoundsRaw ?? 0),
+      totalBpCount: Number(totalBpCountRaw ?? 0),
       modeDist: {
         casual: c,
         rational: r,
@@ -98,6 +103,7 @@ export async function GET() {
         totalRounds: 0,
         onlineNow: 0,
         maxRounds: 0,
+        totalBpCount: 0,
         modeDist: {
           casual: 0,
           rational: 0,

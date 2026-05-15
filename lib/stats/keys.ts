@@ -16,6 +16,7 @@ export const K_TOTAL_ERRORS = "stats:total:errors"; // 累计错误
 export const K_TOTAL_INTRO_PLAYED = "stats:total:intro_played";
 export const K_TOTAL_INTRO_SKIPPED = "stats:total:intro_skipped";
 export const K_TOTAL_CLEARED = "stats:total:cleared"; // 累计清空重开
+export const K_TOTAL_BP_COUNT = "stats:total:bp_count"; // 累计锤出诊断书份数（v0.7.11.2 新增）
 
 /** 独立访客 set —— 用 SADD 去重后 SCARD 得到 UV */
 export const K_VISITORS_SET = "stats:visitors:set";
@@ -57,6 +58,7 @@ export const K_DAILY_ERRORS = (d: string) => `stats:daily:${d}:errors`;
 export const K_DAILY_FOLLOWUPS = (d: string) => `stats:daily:${d}:followups`;
 export const K_DAILY_MODE = (d: string, mode: string) =>
   `stats:daily:${d}:mode:${mode}`;
+export const K_DAILY_BP_COUNT = (d: string) => `stats:daily:${d}:bp_count`;
 
 // ============================================================
 // 实时在线（TTL 自动过期）

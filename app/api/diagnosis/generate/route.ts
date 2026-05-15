@@ -33,6 +33,11 @@ import {
 import type { ModeId } from "@/lib/prompts";
 import { checkDiagnosisRateLimit } from "@/lib/security/diagnosis-rate-limit";
 import { getClient as getKvClient } from "@/lib/stats/kv";
+import {
+  K_TOTAL_BP_COUNT,
+  K_DAILY_BP_COUNT,
+  DAILY_KEY_TTL_SECONDS,
+} from "@/lib/stats/keys";
 
 export const runtime = "nodejs"; // node 运行时（@upstash/redis + fetch 都兼容）
 export const maxDuration = 30; // Vercel 函数超时
@@ -170,6 +175,21 @@ export async function POST(req: NextRequest) {
     await kv.set(`diagnosis:${reportId}`, JSON.stringify(report), {
       ex: 90 * 24 * 60 * 60, // 90 天
     });
+
+    // 5.1 BP 计数埋点（v0.7.11.2 新增）—— 累计 + 当日，失败静默吞掉不阻塞主流程
+    try {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      await Promise.all([
+        kv.incr(K_TOTAL_BP_COUNT),
+        kv.incr(K_DAILY_BP_COUNT(today)),
+      ]);
+      // 给当日 key 续 TTL（incr 不会自动设 TTL，这里 EXPIRE 覆盖式续期）
+      await kv
+        .expire(K_DAILY_BP_COUNT(today), DAILY_KEY_TTL_SECONDS)
+        .catch(() => {});
+    } catch (bpErr) {
+      console.warn("[/api/diagnosis/generate] BP 计数埋点失败（已忽略）：", bpErr);
+    }
   } catch (err) {
     // KV 写入失败不阻塞——降级直接报错让用户重试
     console.error("[/api/diagnosis/generate] KV 写入失败：", err);

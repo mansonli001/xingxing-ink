@@ -37,6 +37,7 @@ type StatsSummary = {
   totalRounds: number;
   onlineNow: number;
   maxRounds: number;
+  totalBpCount?: number;
   modeDist: ModeDist;
   generatedAt: number;
 };
@@ -135,8 +136,9 @@ export function StatsBanner() {
   if (firstLoad) return null;
   if (failed || !data) return null;
 
-  const { totalVisitors, totalRounds, onlineNow, modeDist } = data;
+  const { totalVisitors, totalRounds, onlineNow, modeDist, totalBpCount } = data;
   const isColdStart = totalRounds < COLDSTART_ROUNDS;
+  const bpCount = totalBpCount ?? 0;
 
   return (
     <div
@@ -154,6 +156,11 @@ export function StatsBanner() {
           <>
             醒醒已陪 <AnimatedNumber value={totalVisitors} firstLoad /> 位朋友 ·
             捶过 <AnimatedNumber value={totalRounds} firstLoad /> 轮
+            {bpCount > 0 && (
+              <>
+                {" "}· 锤出 <AnimatedNumber value={bpCount} firstLoad /> 份 BP
+              </>
+            )}
           </>
         )}
         {/* 三档分布悬浮按钮（极小 ▾） */}

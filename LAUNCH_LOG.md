@@ -1,9 +1,14 @@
 # 醒醒 MVP 上线日志
 
 > 项目：xingxing-ink（"醒醒"——御姐风格 AI 对话产品）
-> 上线日期：2026-05-09
+> 上线日期：2026-05-09（v0.1 MVP 首版上线）
+> 当前版本：v0.7.12.0（2026-05-15）
 > 作者：mansonli001（Loading in Progress / Cyber Loading）
-> 线上：https://xingxing-ink.vercel.app/
+> 线上：https://xingxing.starfluxes.com/（v0.7.10 切自有子域）
+> 历史 URL：https://xingxing-ink.vercel.app/（v0.7.10 之前）
+
+> 本文档为 **MVP 首版上线档案**（5/9 当天写下的现场记录），保持原貌；
+> 上线后的演进路线见末尾「上线后演进（v0.1 → v0.7.12.0）」+ `CHANGELOG.md` 完整变更记录。
 
 ---
 
@@ -118,3 +123,71 @@ curl -N https://xingxing-ink.vercel.app/api/chat \
 ---
 
 **Loading in Progress……**
+
+---
+
+## 八、上线后演进（v0.1 → v0.7.12.0）· 2026-05-09 → 2026-05-15
+
+> 这是上线**之后**补的，不是上线当天写的。本节为索引，详细变更见 `CHANGELOG.md` 与 `ROADMAP.md`。
+
+### 8.1 域名升级（v0.7.10）
+
+- 主域 `starfluxes.com` 在阿里云万网注册
+- DNS NS 迁到 Cloudflare（橙云代理 · 解决国内 Vercel 不稳）
+- 子域 `xingxing.starfluxes.com` 绑定本项目（v0.7.10 切换）
+- 旧 vercel.app 域保留作 dev 兜底，不再对外推
+
+### 8.2 私藏 mind repo 上线（v0.7.10）
+
+- 主 repo 开源（`github.com/mansonli001/xingxing-ink`）
+- 私藏 repo `xingxing-ink-mind`（醒醒方法论矩阵 v1.0 · 51% 内容）
+- symlink + Vercel `MIND_REPO_TOKEN` 拉取，构建期注入
+- 详见 README "私藏方法论 mind repo" 段
+
+### 8.3 安全 P0 加固（v0.7.9.7.8）
+
+- Chat Stream 双维度限流：IP 30/h + sessionId 200/d
+- 全站基础安全响应头：CSP / HSTS / X-Frame-Options: DENY / X-Content-Type-Options
+- 详见 `CHANGELOG.md` v0.7.9.7.8
+
+### 8.4 诊断书全链路打通（v0.7.9.8 → v0.7.11.2）
+
+- v0.7.9.8 骨架上线（暗夜玫瑰双主题三档差异化）
+- v0.7.9.10 Header 重构 + 保存长图
+- v0.7.11 LLM 真生成接通（DeepSeek + KV 持久化）
+- v0.7.11.2 主页加「锤出 X 份 BP」+ 全面去 emoji 改 SVG
+
+### 8.5 Q 账本地基（v0.7.12.0）
+
+- 把醒醒"心里过"的 Q 进度升级为真账本（KV 90 天 TTL）
+- fire-and-forget 判官 LLM 异步推断每轮挥刀增量
+- BP 生成门槛 ≥2 轮 → ≥6 轮 + 有效覆盖 ≥4（防空洞 BP）
+- 主页加「12 题里聊透 X 题」小行
+- Chat 第 3/6/9 轮顶部进度提示
+- 详见 `CHANGELOG.md` v0.7.12.0 完整条目
+
+### 8.6 关于"第六节·下一步"的回顾
+
+5/9 当时写的：
+
+| 计划 | 状态 |
+|---|---|
+| P0 注册自有域名 | ✅ 完成（v0.7.10 starfluxes.com） |
+| P0 Vercel 绑定域名 | ✅ 完成（v0.7.10） |
+| P0 接入埋点 | ✅ 完成（v0.7.9.1 最小埋点 + v0.7.9.2 自建 KV 数据面板） |
+| P1 三档数据观察 | 🟡 数据面板已建，等流量上来再砍/补 |
+| P1 公众号 + 小红书冷启 | 🟡 公众号已写两篇 / 小红书要等换完域名后启动 |
+| P1 上线复盘文章 | 🔴 推迟至少 1 个月（让产品先跑稳数据再写） |
+| P2 语音 / 历史本地缓存 / 付费档 | 🔴 v0.8+ 才考虑 |
+
+### 8.7 下一段路（v0.7.13 ~ v0.7.15）
+
+按「近月 P0 三件事」推进，详见 `ROADMAP.md`：
+
+1. **前端用户体验优化**（最高优先级）—— 真机走 5 条黄金路径 + 微信内置浏览器适配 + iOS Safari 防放大全覆盖
+2. **扩展 PRD 等付费功能**（商业化探索，但 v0.8 才正式开）
+3. **Debug**（用户反馈一个修一个，小步快跑）
+
+---
+
+**Loading in Progress…… still loading.**

@@ -1,10 +1,207 @@
 # 醒醒 · 更新日志
 
 > 项目：xingxing-ink
-> 线上：https://xingxing-ink.vercel.app/
+> 线上：https://xingxing.starfluxes.com/
 > 维护：mansonli001（Loading in Progress）
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [v0.7.12.0] - 2026-05-15 — 「Q 账本地基 + BP 门槛升级 + 外部评测漏洞修复」
+
+> 外部专家提交 22 条评测意见，本版分类吸收：12 条直接落地 + 4 条转译落地 + 6 条记到 v0.7.13+。
+> 一包到位 4 commit 推送，分别对应数据层 / 聊天层 / 闭环层 / 修缮层。
+
+### Added · Q 账本地基（救命点 2 · 评测意见 #11/#14）
+
+- **`lib/diagnosis/types.ts`** 新增 `QLedger` / `QLedgerEntry` / `LedgerIncrement` 三个类型
+- **`lib/stats/keys.ts`** 新增三个 KV key 常量：
+  - `K_TOTAL_Q_FULLY_COVERED`：累计聊透 Q 题数（全站汇总）
+  - `K_DAILY_Q_FULLY_COVERED(d)`：当日新晋聊透 Q 题数
+  - `K_SESSION_LEDGER(sessionId)`：会话级账本，TTL 90 天
+- **`lib/diagnosis/q-ledger.ts`** 新建（210 行）· 6 个纯函数：
+  - `hasUserFact(text)`：规则版"用户消息含事实"检测（数字 / 专有大写词 / 长度 ≥30 / 具体动词），堵 qProgress 虚高 bug
+  - `makeEmptyLedger` / `mergeIncrement` / `computeNewlyFullyCovered`
+  - `loadLedger` / `saveLedger`（KV 90 天 TTL 续期）
+- **`lib/diagnosis/q-ledger-judge.ts`** 新建（180 行）· 轻量判官 LLM：
+  - 调 deepseek-chat / temperature=0.2 / max_tokens=300 / response_format=json_object
+  - prompt < 1500 token，严格 schema 验证 + 字段过滤
+  - 推断本轮挥到了 Q 几第几刀，返回增量
+- **`lib/diagnosis/bp-gate.ts`** 新建（90 行）· BP 生成门槛：
+  - `checkBPEligibility`：≥6 轮 且 fullyCovered+halfCovered ≥ 4
+  - `describeRemainingPieces` 给 Chat UI 软提示用
+  - friendly error 文案三档（缺轮 / 缺覆盖 / 都缺）
+
+### Changed · 救命修复（评测意见 #10）
+
+- **`app/api/chat/stream/route.ts`** 流式回复 `done` 事件后追加 fire-and-forget 异步任务：
+  - 用户消息无 `hasUserFact` 时直接跳过判官（防虚高 + 省钱兜底）
+  - 失败链路（judge LLM / KV / saveLedger）全部 `console.warn` 静默吞，绝不阻塞主对话
+  - 新晋 fullyCovered 时 `incrby` 累计/当日两个 counter
+- **`lib/diagnosis/generator.ts`** `GenerateOptions` 新增可选 `prefilledLedger?: QLedger`：
+  - 存在则在 user prompt 末尾追加 `# 参考账本` 段（已聊透 / 半聊到 / 没聊三组 + 用户原话证据）
+  - 不传走原路径，向后兼容
+- **`app/api/diagnosis/generate/route.ts`** 限流后插入 BP 门槛闸：
+  - 不达标返 422 + `gate` 字段（`missingRounds` / `missingCoverage` / 当前进度）
+  - 达标则把已读 ledger 作 `prefilledLedger` 传 generator（避免重复读 KV）
+  - **门槛 ≥2 轮 → ≥6 轮 + 有效覆盖 ≥4**（防空洞 BP 伤口碑）
+
+### Added · 用户感知
+
+- **`app/api/stats/summary/route.ts`** `StatsSummary` 新增 `totalQFullyCovered: number`
+- **`components/StatsBanner.tsx`** 在线行下方新增 `.stats-line-pieces`「12 题里聊透 X 题」：
+  - 字号 11px / 弱化色（玫瑰粉 42%）/ 不抢戏
+  - 仅 `totalQFullyCovered > 0` 且非冷启时显示（冷启不闪 0）
+  - AnimatedNumber 数字滚动复用现有动画
+- **`components/chat/ChatProgressHint.tsx`** 新建（87 行）· Chat 顶部进度提示：
+  - 第 3 / 6 / 9 轮触发顶部一行 toast（不露 Q 编号）
+  - 三档差异化文案（怼 / 醒 / 暖）
+  - sessionStorage 防重复（同会话同轮次只触发一次）
+  - 6 秒后自动淡出
+- 接入 `components/Chat.tsx`（在 ModeSelector 与消息列表之间）
+
+### Fixed · 外部评测漏洞修复
+
+- **emoji 漏修（评测意见 #3 完整修复）**：
+  - `app/diagnosis/[id]/page.tsx`：页头 + footer 的 ⏰ → `IconHourglass` SVG
+  - `app/diagnosis/demo/page.tsx`：同上
+  - `components/diagnosis/DiagnosisToolbar.tsx`：三档 🌿❄️🔥 → `IconLeaf` / `IconSnow` / `IconFlame` SVG
+  - `lib/diagnosis/demo.ts`：正文 ✅⚠️❌ → 纯文字标签（立得住 / 有大缺口的 / 完全空白的）
+  - 全部 SVG 复用 v0.7.11.2 同一套规范（24×24 / stroke=1.5 / currentColor）
+- **OG 慢修复（评测意见 #4）**：
+  - `app/og/route.tsx` `Cache-Control` `max-age=3600` → `max-age=86400` + `stale-while-revalidate=604800`
+  - 微信首屏分享延迟从 6.5s 大幅降低（CDN 命中后约 50ms）
+- **版本号对齐（评测意见 #2）**：
+  - `package.json` version `0.1.0` → `0.7.12.0`
+  - `ROADMAP.md` `v0.7.9.2` → `v0.7.12.0` + 近月三大重点（UX / 付费 / Debug）
+  - `README.md` 顶部信息卡 + 版本史段 + ASCII 流程图全部同步
+
+### Cost / Performance
+
+- 判官调用 ~300ms（fire-and-forget · 用户感知不到）
+- 判官成本 ~$0.0001/轮 · 1000 轮 ≈ ¥0.7
+- 首页 71.1KB → 72.0KB（+0.9KB · 含小行 + AnimatedNumber + Toolbar SVG）
+- 主对话流式链路 0 影响（双链路完全解耦）
+
+### 范围之外（明确推迟到 v0.7.13+）
+
+- ❌ 选项 UI（OptionChips、点击事件回灌）
+- ❌ 对话侧栏完整进度条
+- ❌ 三档 picker / arsenal_addon 差异化挤法
+- ❌ stats/summary 整体性能优化
+- ❌ 自动化测试补全
+- ❌ 真机跑 5 份 BP 验证（用户决策 D 推完再说）
+
+### 4 commit 分步推送
+
+| commit | 层 | 内容 |
+|---|---|---|
+| `0783486` | 1/4 数据层 | 类型 + 4 模块（+586 行 · 0 行为变更，未集成） |
+| `5b63f06` | 2/4 聊天层 | fire-and-forget + 门槛 + 吃账本（+192 行） |
+| `b7d96ec` | 3/4 闭环层 | summary API + 小行 + Chat 提示 + OG cache（+187 行） |
+| `c840bf1` | 4/4 修缮层 | emoji 漏修 + 版本号 + ROADMAP/README（+221 行） |
+
+### 验证
+
+- tsc 0 error / 0 lint / next build ✓
+- 首页 72.0KB（+0.9KB 在预算内）
+- 4 commit 独立可回滚
+
+---
+
+## [v0.7.11.2] - 2026-05-15 — 「主页加锤出 X 份 BP 计数 + 诊断书全面去 emoji 改 SVG」
+
+### Added
+
+- **`lib/stats/keys.ts`** 新增 `K_TOTAL_BP_COUNT`（累计锤出诊断书份数）+ `K_DAILY_BP_COUNT`
+- **`app/api/diagnosis/generate/route.ts`** BP 生成成功后 fire-and-forget 累计 incr
+- **`app/api/stats/summary/route.ts`** `StatsSummary` 新增 `totalBpCount: number`
+- **`components/StatsBanner.tsx`** 大行追加「· 锤出 X 份 BP」（仅 >0 时显示，冷启不闪 0）
+
+### Changed
+
+- 诊断书全面去 emoji，改 SVG 系统：
+  - `IconHourglass` / `IconCheck` / `IconWarning` / `IconCross` 等 24×24 stroke=1.5 / currentColor 规范
+  - `StatusChip` 彩色徽章组件（玫瑰红 / 暖金 / 紫罗兰三档）
+  - `DiagnosisCard.tsx` 全文替换
+- README 重写为 12 节项目说明书
+
+### 验证
+
+- tsc 0 error / next build ✓ / 首页 71.1KB
+
+---
+
+## [v0.7.11.1] - 2026-05-15 — 「诊断书手机端长图体验 4 项优化」
+
+### Fixed
+
+1. 长图截断：`html2canvas` `windowWidth` 改 `scrollWidth` 防溢出
+2. 长图分辨率：`scale=2` 升级为 `scale=window.devicePixelRatio || 2`
+3. 移动端弹窗：保存按钮改唤起原生分享 API 兼容微信
+4. 长图字体：等待 `document.fonts.ready` 再截图，避免 fallback 字体
+
+---
+
+## [v0.7.11] - 2026-05-15 — 「诊断书全链路打通 · LLM 真生成 + KV 持久化」
+
+### Added
+
+- **`lib/diagnosis/generator.ts`** 完整 LLM 生成器：
+  - DeepSeek 调用 + JSON schema 严格验证 + 1 次重试
+  - 12 问框架完整覆盖（business / product / founder 三层）
+  - ProgressTable / fullyCovered / halfCovered / notCovered 三态统计
+- **`lib/diagnosis/storage.ts`** KV 持久化：
+  - `report:{id}` 存全文 / TTL 30 天
+  - 短链 `reportId` 12 位 base32
+- **`app/api/diagnosis/generate/route.ts`** 生成 API（限流 + 30s 超时）
+- **`app/diagnosis/[id]/page.tsx`** 诊断书详情页（SSR + meta + OG）
+
+### Changed
+
+- demo 页接入真实 schema（之前是硬编码 mock）
+- 三档差异化主题（暖玫瑰 / 冰金 / 火焰）
+
+### 验证
+
+- 三档全跑通 / KV 写入正常 / 短链可分享
+
+---
+
+## [v0.7.9.10] - 2026-05-14 — 「诊断书 Header 重构 · 删档位切换 + banner · 加保存长图」
+
+### Changed
+
+- `DiagnosisToolbar.tsx`：删档位切换器（诊断书=锁定档位的产物，不可切）
+- 顶部留：档位 pill（不可点）+ 保存长图按钮
+- 删 SSR banner（产物页应直接呈现，不要营销噪音）
+
+### Added
+
+- 保存长图：`html2canvas` 截 `#diagnosis-snapshot` 全 DOM
+- 自适应 toast 提示「保存到相册了」/「PC 用右键另存」
+
+---
+
+## [v0.7.9.9] - 2026-05-14 — 「主页 Header 加「出诊断书」入口 · 离线版打通跳转」
+
+### Added
+
+- 主页 Header 增「出诊断书」按钮 → `/diagnosis/demo`（离线版示范）
+- demo 页接管路由跳转，与 v0.7.9.8 骨架打通
+
+---
+
+## [v0.7.9.8] - 2026-05-14 — 「诊断书展示页骨架上线 · 暗夜玫瑰双主题三档差异化」
+
+### Added
+
+- `app/diagnosis/[id]/page.tsx` SSR 骨架（hardcoded mock data）
+- `app/diagnosis/demo/page.tsx` 离线示范页
+- `components/diagnosis/DiagnosisCard.tsx` PART 1/2/3 完整布局
+- 暗夜玫瑰双主题（暖玫瑰 / 冰金 / 火焰三档色）
+- SEO meta + OG 图占位
 
 ---
 

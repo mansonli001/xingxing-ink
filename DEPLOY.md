@@ -2,16 +2,21 @@
 
 > 给未来的自己（和任何想 fork 这个项目的人）看的部署备忘录。
 >
-> 目标：从零到 https://xingxing.ink 可访问，**45 分钟以内**。
+> 目标：从零到 https://xingxing.starfluxes.com 可访问，**45 分钟以内**。
+>
+> 本文最近一次校对：v0.7.12.0（2026-05-15）。
+> 历史临时域名 `xingxing-ink.vercel.app` 仍可访问作 dev 兜底，但生产已切自有子域。
 
 ---
 
 ## 第 0 步 · 上线前检查清单
 
 - [ ] DeepSeek 控制台已生成可用 API Key（**生产用，不是开发用**）
+- [ ] Upstash 控制台已开 Redis 数据库（KV 自建数据面板用 · v0.7.9.2+ 必需）
 - [ ] GitHub 账号已登录（mansonli001）
 - [ ] Vercel 账号已登录（与 GitHub 同账号 mansonli001）
-- [ ] 域名注册商账号（如果要绑定 xingxing.ink）
+- [ ] 域名注册商账号（如绑定 starfluxes.com 子域）
+- [ ] 私藏 mind repo `xingxing-ink-mind` 已建好（v0.7.10+ 必需 · 否则方法论矩阵走 fallback）
 
 ---
 
@@ -73,16 +78,44 @@ git push -u origin main
 
 ### 2.3 ⭐ 配置环境变量（关键步骤）
 
-展开 **Environment Variables**，添加：
+展开 **Environment Variables**，添加（v0.7.12.0 全量清单）：
+
+#### 必填（生产功能依赖）
 
 | Key | Value | 说明 |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | `sk-你的生产 Key` | DeepSeek 控制台生成的新 Key |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | 不用改 |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | 不用改 |
+
+#### KV 数据面板（v0.7.9.2+ 必填）
+
+| Key | Value |
+|---|---|
+| `KV_REST_API_URL` | Upstash Redis REST URL |
+| `KV_REST_API_TOKEN` | Upstash Redis REST Token |
+| `KV_REST_API_READ_ONLY_TOKEN` | Upstash Redis 只读 Token（可选，给 admin 用） |
+
+#### /admin 后台 4 层鉴权（v0.7.9.2+ 必填）
+
+| Key | Value | 说明 |
+|---|---|---|
+| `ADMIN_PASSWORD` | 自定义强密码 | 后台访问密码（≥16 字符） |
+| `ADMIN_IP_WHITELIST` | `逗号分隔 CIDR` | 例 `1.2.3.4/32,5.6.7.0/24`（可选） |
+
+#### 私藏方法论 mind repo（v0.7.10+ 必填，否则走 fallback）
+
+| Key | Value | 说明 |
+|---|---|---|
+| `MIND_REPO_TOKEN` | GitHub PAT（仅 `repo` scope） | 构建期 `scripts/fetch-mind-repo.sh` 拉私藏 repo 用 |
+
+#### 可选 / 默认关
+
+| Key | Value | 说明 |
+|---|---|---|
 | `NEXT_PUBLIC_TTS_ENABLED` | `false` | TTS 暂不启用 |
 
-每条 env 都勾选 **Production / Preview / Development**（三个环境都用）。
+每条 env 都勾选 **Production / Preview / Development**（三个环境都用），除 `MIND_REPO_TOKEN` 可只勾 Production。
 
 ### 2.4 Deploy
 
@@ -92,35 +125,46 @@ git push -u origin main
 
 ---
 
-## 第 3 步 · 绑定 xingxing.ink 域名（可选，先用临时域名也能跑）
+## 第 3 步 · 绑定 xingxing.starfluxes.com 子域（生产实际方案 · v0.7.10）
 
-### 3.1 注册域名
+> 历史方案是 `xingxing.ink` 独立域，但因价格 + 个人品牌护城河考虑，
+> 最终决策是用主域 `starfluxes.com` 留作个人主页，每个项目分配一个子域。
+> 本项目子域：`xingxing.starfluxes.com`。
 
-如果还没注册，推荐：
-- **Namecheap**：`.ink` 域名约 $10-15/年，操作简单
-- **Cloudflare Registrar**：成本价（无加价），约 $9-13/年，但只能注册不能新购扩展，需要先到别处买再转入
-- **阿里云万网**：国内方便，约 ¥80-200/年
+### 3.1 注册主域（一次性，未来所有项目共用）
 
-### 3.2 在 Vercel 添加域名
+阿里云万网注册 `starfluxes.com`（个人副业品牌主域 · ≈¥80/年）。
 
-1. 进入项目 → **Settings** → **Domains**
-2. 输入 `xingxing.ink`，点 **Add**
-3. Vercel 会显示需要在域名注册商配置的 DNS 记录
+### 3.2 把 DNS 迁到 Cloudflare（一次性）
 
-### 3.3 配置 DNS（在域名注册商处）
+1. Cloudflare 添加站点 `starfluxes.com`（免费版）
+2. 阿里云万网域名管理 → DNS 服务商 → 换 Cloudflare NS：
+   `dora.ns.cloudflare.com` / `isaac.ns.cloudflare.com`
+3. 等 DNS 全球生效（5 分钟 ~ 24 小时）
 
-#### 方案 A：用 Vercel Nameservers（推荐，最省心）
-把域名的 Nameservers 改成 Vercel 给的（通常是 `ns1.vercel-dns.com` 和 `ns2.vercel-dns.com`）。
+### 3.3 在 Vercel 添加子域
 
-#### 方案 B：保留原 Nameservers，只加 DNS 记录
-- **A 记录**：`@` → `76.76.21.21`
-- **CNAME 记录**：`www` → `cname.vercel-dns.com`
+1. 项目 → **Settings** → **Domains**
+2. 输入 `xingxing.starfluxes.com`，点 **Add**
+3. 不勾选 redirect to www（子域不加 www）
 
-### 3.4 等待 DNS 生效
+### 3.4 在 Cloudflare 加 CNAME
 
-通常 5 分钟到 24 小时。可以在 https://dnschecker.org 检查全球生效情况。
+`xingxing` → `cname.vercel-dns.com`（**橙云代理 ON** · 解决国内访问 Vercel 不稳）
 
-Vercel 会自动签 Let's Encrypt SSL，HTTPS 自动启用。
+### 3.5 等待生效 + SSL
+
+- DNS 通常 5 分钟内生效
+- Vercel 自动签 Let's Encrypt SSL
+- HTTPS 自动启用
+- Cloudflare 与 Vercel 双向 SSL 已验证兼容
+
+### 3.6 铁律（同样适用于未来所有项目）
+
+1. 永远不要把单一项目绑到主域 `starfluxes.com`（主域留作个人主页）
+2. 子域不加 www（`xingxing.starfluxes.com` 不要 www）
+3. 每个新项目用独立子域，方便未来项目独立或迁移
+4. 推广分享一律用子域，不用 `vercel.app` 默认域名
 
 ---
 
@@ -128,7 +172,7 @@ Vercel 会自动签 Let's Encrypt SSL，HTTPS 自动启用。
 
 ### 4.1 功能验证
 
-打开 https://xingxing.ink （或临时 `.vercel.app` 域名）：
+打开 https://xingxing.starfluxes.com （或临时 `.vercel.app` 域名）：
 
 - [ ] 首页加载正常（醒醒 / 别做梦了 / XINGXING.INK 三段式）
 - [ ] 三张人物剪影在右下角显示，模式切换有交叉淡化
@@ -203,6 +247,43 @@ Vercel Dashboard → **Deployments** → 找到上一个稳定版本 → **⋯**
 
 ---
 
-最后提醒：**API Key 是钱**。不要在 Git、Slack、邮件里明文出现。永远走 Vercel/Cloudflare 的 Environment Variables。
+## 私藏 mind repo · 部署补充（v0.7.10+）
+
+> 本项目核心方法论矩阵（醒醒方法论 v1.0）放在私藏 repo `xingxing-ink-mind`，
+> 不开源，构建期通过 `MIND_REPO_TOKEN` 拉取并 symlink 到 `lib/prompts/_methodology`。
+> 没配 `MIND_REPO_TOKEN` 时方法论层走 fallback（=v0.7.7 行为），不会构建失败。
+
+### 完整启用步骤
+
+1. **建私藏 repo**：GitHub 创建 `xingxing-ink-mind`，必须 **Private**
+2. **推方法论本地 → GitHub**：
+   ```bash
+   cd ../xingxing-ink-mind
+   git remote add origin git@github.com:mansonli001/xingxing-ink-mind.git
+   git push -u origin main
+   ```
+3. **生成 GitHub PAT**：
+   - GitHub Settings → Developer settings → Personal access tokens → Generate new token (classic)
+   - 权限：仅勾选 `repo`（full control of private repositories）
+   - **Token 只显示一次**，立即复制
+4. **Vercel 加环境变量**：`MIND_REPO_TOKEN` = 上面的 PAT，仅 Production
+5. **触发 redeploy**：main 推任意 commit 即可
+
+### 验证
+
+- Vercel build 日志应见 `[fetch-mind-repo] cloning...` 字样
+- 不见则走 fallback（仍能跑，但方法论层降级）
+
+### 健康检查脚本（本地）
+
+```bash
+node scripts/_v078_health.mjs
+```
+
+会检查 symlink、关键方法论文件存在性。
+
+---
+
+最后提醒：**API Key 和 PAT 都是钱**。不要在 Git、Slack、邮件里明文出现。永远走 Vercel/Cloudflare 的 Environment Variables。
 
 Loading in Progress……

@@ -38,6 +38,8 @@ import {
   K_DAILY_BP_COUNT,
   DAILY_KEY_TTL_SECONDS,
 } from "@/lib/stats/keys";
+import { loadLedger } from "@/lib/diagnosis/q-ledger";
+import { checkBPEligibility } from "@/lib/diagnosis/bp-gate";
 
 export const runtime = "nodejs"; // node 运行时（@upstash/redis + fetch 都兼容）
 export const maxDuration = 30; // Vercel 函数超时
@@ -140,6 +142,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ---- 3.5 BP 生成门槛检查（v0.7.12.0 · 防止空洞 BP 伤害口碑） ----
+  // 读账本（不存在则用 null 走最严判定）
+  const ledgerForGate = sessionId
+    ? await loadLedger(sessionId).catch(() => null)
+    : null;
+  const eligibility = checkBPEligibility(turnCount, ledgerForGate);
+  if (!eligibility.eligible) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: eligibility.message,
+        retryable: false,
+        // 给前端展示进度用
+        gate: {
+          missingRounds: eligibility.missingRounds,
+          missingCoverage: eligibility.missingCoverage,
+          currentTurns: eligibility.currentTurns,
+          currentCoverage: eligibility.currentCoverage,
+        },
+      },
+      { status: 422 }
+    );
+  }
+
   // ---- 4. 生成诊断书（30s 超时由 maxDuration 控制） ----
   const reportId = generateReportId();
   let report;
@@ -151,6 +177,8 @@ export async function POST(req: NextRequest) {
       turnCount,
       qProgress: body.qProgress,
       reportId,
+      // v0.7.12.0：把账本作为"参考事实"传给 generator（已在 gate 阶段读过）
+      prefilledLedger: ledgerForGate ?? undefined,
     });
   } catch (err) {
     const msg = (err as Error).message || "生成失败";

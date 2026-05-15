@@ -8,6 +8,21 @@ import {
   appendMessage,
   getOrCreateSession,
 } from "@/lib/session";
+import {
+  loadLedger,
+  saveLedger,
+  makeEmptyLedger,
+  mergeIncrement,
+  computeNewlyFullyCovered,
+  hasUserFact,
+} from "@/lib/diagnosis/q-ledger";
+import { judgeRoundIncrement } from "@/lib/diagnosis/q-ledger-judge";
+import { getClient as getKvClient } from "@/lib/stats/kv";
+import {
+  K_TOTAL_Q_FULLY_COVERED,
+  K_DAILY_Q_FULLY_COVERED,
+  DAILY_KEY_TTL_SECONDS,
+} from "@/lib/stats/keys";
 
 export const runtime = "nodejs"; // 需要 fs 读 prompt
 export const dynamic = "force-dynamic";
@@ -211,6 +226,23 @@ export async function POST(req: NextRequest) {
           session_id: session.id,
           full: assistantText,
           q_progress: qProgressAfter,
+        });
+
+        // v0.7.12.0：fire-and-forget 判官 —— 把"心智账本"持久化为真账本
+        // 流式回复已发完 done，用户不感知；失败静默，绝不阻塞主对话
+        void updateLedgerInBackground({
+          sessionId: session.id,
+          mode: modeId,
+          history: session.history.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+          turnCount: Math.floor(session.history.length / 2),
+        }).catch((err) => {
+          console.warn(
+            "[q-ledger] background update failed (silent):",
+            err instanceof Error ? err.message : err
+          );
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "未知错误";
@@ -419,4 +451,96 @@ function stripStageDirections(text: string): string {
   );
 
   return text;
+}
+
+// =========================================================================
+// v0.7.12.0 · fire-and-forget 判官：账本异步更新
+//
+// 流程：loadLedger → judgeRoundIncrement → mergeIncrement → saveLedger →
+//      computeNewlyFullyCovered → 对增量逐个 incr stats counter
+//
+// 任意一步失败都吞异常 + console.warn，绝不抛回主链路。
+// 性能预算：~300ms（用户已收到 done，不阻塞）
+// =========================================================================
+
+interface BackgroundUpdateOpts {
+  sessionId: string;
+  mode: ModeId;
+  history: Array<{ role: "user" | "assistant"; content: string }>;
+  turnCount: number;
+}
+
+async function updateLedgerInBackground(
+  opts: BackgroundUpdateOpts
+): Promise<void> {
+  const { sessionId, mode, history, turnCount } = opts;
+
+  // 性能/成本兜底：本轮用户消息无"事实"时跳过判官调用（防虚高 + 省钱）
+  const lastUserMsg = [...history]
+    .reverse()
+    .find((m) => m.role === "user");
+  if (!lastUserMsg || !hasUserFact(lastUserMsg.content)) {
+    return; // 静默跳过，不调判官
+  }
+
+  // 1. 读旧账本（不存在则建空账本）
+  const oldLedger =
+    (await loadLedger(sessionId).catch(() => null)) ??
+    makeEmptyLedger(sessionId, mode, turnCount);
+
+  // 2. 调判官 LLM 推断本轮挥刀增量（最近 3 轮 = 6 条消息）
+  let increment;
+  try {
+    increment = await judgeRoundIncrement({
+      recentMessages: history.slice(-6),
+      currentLedger: oldLedger,
+      mode,
+    });
+  } catch (err) {
+    console.warn(
+      "[q-ledger] judge LLM failed:",
+      err instanceof Error ? err.message : err
+    );
+    return;
+  }
+
+  if (!increment.updates || increment.updates.length === 0) {
+    return; // 本轮无升级，无需写
+  }
+
+  // 3. 合并增量
+  const newLedger = mergeIncrement(oldLedger, increment, turnCount);
+
+  // 4. 写回 KV（失败静默）
+  try {
+    await saveLedger(newLedger);
+  } catch (err) {
+    console.warn(
+      "[q-ledger] saveLedger failed:",
+      err instanceof Error ? err.message : err
+    );
+    return;
+  }
+
+  // 5. 新晋"聊透"才 incr 全站 counter
+  const newlyFully = computeNewlyFullyCovered(oldLedger, newLedger);
+  if (newlyFully.length === 0) return;
+
+  try {
+    const kv = await getKvClient();
+    const today = new Date().toISOString().slice(0, 10);
+    // 每个新晋题号都 incr（incrby 一次性更高效）
+    await Promise.all([
+      kv.incrby(K_TOTAL_Q_FULLY_COVERED, newlyFully.length),
+      kv.incrby(K_DAILY_Q_FULLY_COVERED(today), newlyFully.length),
+    ]);
+    await kv
+      .expire(K_DAILY_Q_FULLY_COVERED(today), DAILY_KEY_TTL_SECONDS)
+      .catch(() => {});
+  } catch (err) {
+    console.warn(
+      "[q-ledger] stats incr failed:",
+      err instanceof Error ? err.message : err
+    );
+  }
 }

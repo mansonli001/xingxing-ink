@@ -16,7 +16,7 @@
 
 import type { ChatMessage } from "@/lib/deepseek";
 import type { ModeId } from "@/lib/prompts";
-import type { DiagnosisReport } from "./types";
+import type { DiagnosisReport, QLedger } from "./types";
 
 const DEEPSEEK_BASE_URL =
   process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
@@ -157,16 +157,52 @@ interface CallLLMOptions {
   conversation: string;
   mode: ModeId;
   signal?: AbortSignal;
+  prefilledLedger?: QLedger;
 }
 
 async function callLLMForJson({
   conversation,
   mode,
   signal,
+  prefilledLedger,
 }: CallLLMOptions): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new Error("DEEPSEEK_API_KEY 未配置");
+  }
+
+  // v0.7.12.0：账本注入（仅作"参考事实"，最终判定仍以对话为准）
+  let ledgerHint = "";
+  if (prefilledLedger) {
+    const fully = prefilledLedger.fullyCovered.join(",") || "（无）";
+    const half = prefilledLedger.halfCovered
+      .map(
+        (q) =>
+          `Q${q}(${prefilledLedger.entries[q].blades}/3)`
+      )
+      .join(",") || "（无）";
+    const not = prefilledLedger.notCovered.join(",");
+
+    // 提取每题最近一条 userQuote 作为 evidence hint
+    const evidenceLines: string[] = [];
+    for (const qid of [
+      ...prefilledLedger.fullyCovered,
+      ...prefilledLedger.halfCovered,
+    ]) {
+      const e = prefilledLedger.entries[qid];
+      const lastQuote = e.userQuotes[e.userQuotes.length - 1];
+      if (lastQuote) {
+        evidenceLines.push(`Q${qid}: "${lastQuote}"`);
+      }
+    }
+
+    ledgerHint = `
+
+# 参考账本（仅供参考，最终判定以对话为准）
+- 已聊透：${fully}
+- 半聊到：${half}
+- 没聊：${not}
+${evidenceLines.length ? "\n## 用户原话证据（供 userQuote 摘录参考）\n" + evidenceLines.join("\n") : ""}`;
   }
 
   const userPrompt = `# 用户档位
@@ -174,6 +210,7 @@ ${mode}
 
 # 完整对话历史（按时间顺序）
 ${conversation}
+${ledgerHint}
 
 # 任务
 基于上述对话，按系统提示中的 12 问框架，输出诊断书 JSON。`;
@@ -279,6 +316,7 @@ export interface GenerateOptions {
   qProgress?: number; // chat 流里已统计的命中数（可选，作 metadata）
   reportId: string; // 由调用方生成，便于路由跳转
   signal?: AbortSignal;
+  prefilledLedger?: QLedger; // v0.7.12.0：传入账本作为"参考事实"减少 LLM 幻觉
 }
 
 /**
@@ -296,6 +334,7 @@ export async function generateDiagnosisReport(
         conversation,
         mode: opts.mode,
         signal: opts.signal,
+        prefilledLedger: opts.prefilledLedger,
       });
       const parsed = parseAndValidate(raw);
 

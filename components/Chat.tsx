@@ -24,6 +24,10 @@ interface ChatProps {
   clearAll: () => void;
   /** v0.7.9.6：打开抽屉式侧栏（trigger 按钮挂在顶部状态栏左侧） */
   onOpenDrawer?: () => void;
+  /** v0.7.11：诊断书生成需要 sessionId / qProgress / onToast */
+  sessionId?: string;
+  qProgress?: number;
+  onToast?: (msg: string) => void;
 }
 
 export function Chat({
@@ -35,10 +39,15 @@ export function Chat({
   sendMessageWith,
   clearAll,
   onOpenDrawer,
+  sessionId,
+  qProgress,
+  onToast,
 }: ChatProps) {
   const [input, setInput] = useState("");
   /** v0.4：当前是否有 AI 消息在播放语音（驱动人像呼吸动效） */
   const [isSpeaking, setIsSpeaking] = useState(false);
+  /** v0.7.11：诊断书生成中 loading（防止重复点击） */
+  const [generatingDiagnosis, setGeneratingDiagnosis] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -128,44 +137,107 @@ export function Chat({
             </span>
           </div>
           <div className="flex items-center gap-3">
-            {/* v0.7.9.9：出诊断书按钮 —— turnCount≥2 才显示，离线版直接跳 demo
-                v0.7.9.10：mode 直接透传主产品档位（casual/rational/scathing），demo 页内部按 ModeId 取数据 */}
+            {/* v0.7.11：出诊断书按钮 —— turnCount≥2 才显示，调 API 异步生成 + 跳转 */}
             {turnCount >= 2 ? (
-              <a
-                href={`/diagnosis/demo?mode=${mode}&from=chat`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
+              <button
+                type="button"
+                onClick={async () => {
+                  if (generatingDiagnosis || streaming) return;
+
+                  // 准备给后端的 messages（去掉 streaming 中的、空的、内部状态字段）
+                  const cleanMessages = messages
+                    .filter((m) => m.done !== false && m.content?.trim())
+                    .map((m) => ({
+                      role: m.role,
+                      content: m.content,
+                    }));
+
+                  if (cleanMessages.length < 4) {
+                    onToast?.("再多聊几句吧，姐还看不出门道");
+                    return;
+                  }
+
+                  setGeneratingDiagnosis(true);
                   track("diagnosis_clicked", {
                     mode,
                     turn_index: turnCount,
                   });
+
+                  try {
+                    const res = await fetch("/api/diagnosis/generate", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        messages: cleanMessages,
+                        mode,
+                        sessionId,
+                        turnCount,
+                        qProgress,
+                      }),
+                    });
+                    const data = await res.json();
+
+                    if (!res.ok || !data.ok) {
+                      onToast?.(data.error || "生成失败，等几秒再试");
+                      setGeneratingDiagnosis(false);
+                      return;
+                    }
+
+                    // 同 tab 跳转 · 对话已经持久化在 localStorage，跳走再回来不丢
+                    window.location.href = data.url;
+                  } catch (err) {
+                    console.error("[diagnosis] 网络错误", err);
+                    onToast?.("网络断了，再试一次");
+                    setGeneratingDiagnosis(false);
+                  }
                 }}
+                disabled={generatingDiagnosis || streaming}
                 className={[
                   "text-[11px] transition-colors flex items-center gap-1",
-                  streaming
-                    ? "text-xx-text-dim/50 pointer-events-none cursor-not-allowed"
+                  generatingDiagnosis
+                    ? "text-xx-gold cursor-wait"
+                    : streaming
+                    ? "text-xx-text-dim/50 cursor-not-allowed"
                     : "text-xx-text-dim hover:text-xx-gold",
                 ].join(" ")}
                 aria-label="为本次对话生成诊断书"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-3 w-3"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="9" y1="13" x2="15" y2="13" />
-                  <line x1="9" y1="17" x2="13" y2="17" />
-                </svg>
-                出诊断书
-              </a>
+                {generatingDiagnosis ? (
+                  <>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3 w-3 animate-spin"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" opacity="0.25" />
+                      <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                    </svg>
+                    醒醒在写…
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="9" y1="13" x2="15" y2="13" />
+                      <line x1="9" y1="17" x2="13" y2="17" />
+                    </svg>
+                    出诊断书
+                  </>
+                )}
+              </button>
             ) : null}
             <button
               type="button"

@@ -471,6 +471,9 @@ export function ChatShell() {
         sendMessageWith={sendMessageWith}
         clearAll={clearAll}
         onOpenDrawer={() => setDrawerOpen(true)}
+        sessionId={sessionId}
+        qProgress={qProgress}
+        onToast={setToastMsg}
       />
       <SideDrawer
         open={drawerOpen}

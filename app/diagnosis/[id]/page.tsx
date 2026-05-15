@@ -1,15 +1,15 @@
 /**
  * 诊断书展示页 · /diagnosis/[id]
  *
- * v0.7.9.7.8 当前状态：
- *   - 路由就位但未接 KV 持久化
- *   - 任何未知 [id] 都回退到 scathing demo（友好降级）
- *   - 仅作为 v0.8.x 路由占位 + 未来路径稳定性保证
+ * v0.7.11：接 KV 读真实数据
+ *   - id 以 demo- 开头 → 走 demo 数据（保留演示路径）
+ *   - id 以 d_ 开头 → 从 Upstash KV 读 JSON
+ *   - 读不到 → notFound 走 404
  *
- * v0.8.x 计划：
- *   - 接 KV：从 Upstash 读 `diagnosis:{id}` JSON
- *   - 接 OG：动态 OG 图（用户名 + 进度 + 金句）
- *   - 接分享：诊断书 URL 公开可访问 90 天
+ * KV schema：
+ *   key: diagnosis:{id}
+ *   value: JSON.stringify(DiagnosisReport)
+ *   TTL:  90 天
  */
 
 import { notFound } from "next/navigation";
@@ -18,6 +18,8 @@ import type { Metadata } from "next";
 import { DiagnosisCard } from "@/components/diagnosis/DiagnosisCard";
 import { DiagnosisToolbar } from "@/components/diagnosis/DiagnosisToolbar";
 import { getDemoReport } from "@/lib/diagnosis/demo";
+import type { DiagnosisReport } from "@/lib/diagnosis/types";
+import { getClient as getKvClient } from "@/lib/stats/kv";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,23 +29,35 @@ interface PageProps {
 }
 
 // ============================================================
-// 数据加载（v0.7.9.7.8：仅 demo · v0.8.x：接 KV）
+// 数据加载（demo 路径继续保留 + 接 KV）
 // ============================================================
 
-async function loadDiagnosis(id: string) {
-  // demo 路径继续走：/diagnosis/demo-scathing 等
+async function loadDiagnosis(id: string): Promise<DiagnosisReport | null> {
+  // demo 路径：/diagnosis/demo-scathing 等（保留演示路径不破坏）
   if (id.startsWith("demo-")) {
     const mode = id.replace("demo-", "");
     return getDemoReport(mode);
   }
 
-  // TODO v0.8.x：接 Upstash KV
-  // const data = await kv.get<DiagnosisReport>(`diagnosis:${id}`);
-  // if (!data) return null;
-  // return data;
+  // 真实诊断书：从 KV 读
+  if (!id.startsWith("d_")) {
+    return null;
+  }
 
-  // 当前阶段：未接 KV → 任何 id 都返回 null（走 404）
-  return null;
+  try {
+    const kv = await getKvClient();
+    const raw = await kv.get<string>(`diagnosis:${id}`);
+    if (!raw) return null;
+
+    // Upstash 返回可能是 string（已序列化）或已自动反序列化为对象
+    if (typeof raw === "string") {
+      return JSON.parse(raw) as DiagnosisReport;
+    }
+    return raw as unknown as DiagnosisReport;
+  } catch (err) {
+    console.error(`[/diagnosis/${id}] KV 读取失败：`, err);
+    return null;
+  }
 }
 
 // ============================================================
@@ -109,16 +123,16 @@ export default async function DiagnosisPage({ params }: PageProps) {
           <DiagnosisCard data={data} />
         </div>
 
-        {/* 底部 CTA */}
+        {/* 底部 CTA · 真实诊断书：回去继续聊 */}
         <section className="max-w-3xl mx-auto mt-12 text-center">
           <p className="font-quote italic text-lg text-xx-text-mid mb-6">
-            想看看你自己的诊断书吗？
+            带着这份诊断回去，继续被怼。
           </p>
           <Link
             href="/"
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-gradient-to-r from-xx-purple to-xx-red text-xx-text font-display font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-105 transition-all"
           >
-            <span>立即去聊一聊</span>
+            <span>回去继续聊</span>
             <span>→</span>
           </Link>
         </section>

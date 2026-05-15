@@ -162,6 +162,12 @@ export function Chat({
                     mode,
                     turn_index: turnCount,
                   });
+                  // v0.7.11.1：开始就 toast 给预期，避免用户以为卡了
+                  onToast?.("醒醒在写诊断书，约 30 秒…");
+                  // 15s 后还没好就再提示一次（仍然在跑）
+                  const midwayHint = setTimeout(() => {
+                    onToast?.("再等等，姐还在挥刀…");
+                  }, 15000);
 
                   try {
                     const res = await fetch("/api/diagnosis/generate", {
@@ -176,6 +182,7 @@ export function Chat({
                       }),
                     });
                     const data = await res.json();
+                    clearTimeout(midwayHint);
 
                     if (!res.ok || !data.ok) {
                       onToast?.(data.error || "生成失败，等几秒再试");
@@ -186,6 +193,7 @@ export function Chat({
                     // 同 tab 跳转 · 对话已经持久化在 localStorage，跳走再回来不丢
                     window.location.href = data.url;
                   } catch (err) {
+                    clearTimeout(midwayHint);
                     console.error("[diagnosis] 网络错误", err);
                     onToast?.("网络断了，再试一次");
                     setGeneratingDiagnosis(false);
@@ -215,7 +223,7 @@ export function Chat({
                       <circle cx="12" cy="12" r="10" opacity="0.25" />
                       <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
                     </svg>
-                    醒醒在写…
+                    醒醒在写… 约 30 秒
                   </>
                 ) : (
                   <>

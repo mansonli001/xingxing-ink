@@ -67,7 +67,7 @@ export function DiagnosisCard({ data }: Props) {
           ⏰
         </div>
 
-        <div className="relative z-10">
+        <div className="relative z-10 text-center sm:text-left">
           <p className="font-display text-xs tracking-[0.2em] text-xx-text-dim mb-3">
             ⏰ 醒醒诊断书 · v1.0
           </p>
@@ -78,7 +78,7 @@ export function DiagnosisCard({ data }: Props) {
             <span className="text-xx-rose">成不成。</span>
           </h1>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-xx-text-mid font-display mb-6">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-sm text-xx-text-mid font-display mb-6">
             <span>第 1 次会诊</span>
             <span className="text-xx-text-dim">·</span>
             <span>已聊 {data.generatedFromTurns} 轮</span>
@@ -89,7 +89,7 @@ export function DiagnosisCard({ data }: Props) {
           </div>
 
           {/* 当前档位标签 */}
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center justify-center sm:justify-start gap-3 mb-6">
             <span
               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border ${accent.chip}`}
             >
@@ -209,23 +209,21 @@ export function DiagnosisCard({ data }: Props) {
       </section>
 
       {/* ========== KILL 金句卡（盖章句） ========== */}
-      <section className="relative rounded-3xl bg-xx-bg p-8 sm:p-12 border-2 border-xx-rose/40 overflow-hidden text-center">
+      <section className="relative rounded-3xl bg-xx-bg p-6 sm:p-12 border-2 border-xx-rose/40 overflow-hidden text-center">
         {/* 装饰 */}
         <div className="absolute inset-0 bg-gradient-to-br from-xx-purple-deep/20 via-transparent to-xx-red/10 pointer-events-none" />
 
         <div className="relative z-10">
-          <p className="font-display text-xs tracking-[0.3em] text-xx-text-dim mb-6">
+          <p className="font-display text-xs tracking-[0.3em] text-xx-text-dim mb-5 sm:mb-6">
             🗡️ 醒醒盖章句
           </p>
 
-          <p className="font-quote italic text-3xl sm:text-5xl text-xx-rose font-bold leading-tight mb-8">
+          <p className="font-quote italic text-xl sm:text-4xl text-xx-rose font-bold leading-snug sm:leading-tight mb-6 sm:mb-8 px-2">
             「{data.killQuote}」
           </p>
 
-          <div className="flex items-center justify-center gap-3 text-xs text-xx-text-dim font-display tracking-widest">
+          <div className="flex items-center justify-center gap-2 text-[10px] sm:text-xs text-xx-text-dim font-display tracking-wider whitespace-nowrap">
             <span>⏰</span>
-            <span>LOADING IN PROGRESS</span>
-            <span>·</span>
             <span>xingxing.starfluxes.com</span>
           </div>
         </div>

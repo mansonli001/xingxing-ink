@@ -308,7 +308,8 @@ export async function GET(request: Request) {
       height: 630,
       fonts,
       headers: {
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        // v0.7.12.0: 1 小时 → 24 小时（外部评测意见 #4 · OG 6.5s 慢，CDN 缓存延长）
+        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
       },
     }
   );

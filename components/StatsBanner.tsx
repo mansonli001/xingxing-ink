@@ -38,6 +38,7 @@ type StatsSummary = {
   onlineNow: number;
   maxRounds: number;
   totalBpCount?: number;
+  totalQFullyCovered?: number;
   modeDist: ModeDist;
   generatedAt: number;
 };
@@ -136,9 +137,10 @@ export function StatsBanner() {
   if (firstLoad) return null;
   if (failed || !data) return null;
 
-  const { totalVisitors, totalRounds, onlineNow, modeDist, totalBpCount } = data;
+  const { totalVisitors, totalRounds, onlineNow, modeDist, totalBpCount, totalQFullyCovered } = data;
   const isColdStart = totalRounds < COLDSTART_ROUNDS;
   const bpCount = totalBpCount ?? 0;
+  const qFullyCount = totalQFullyCovered ?? 0;
 
   return (
     <div
@@ -226,6 +228,13 @@ export function StatsBanner() {
         </div>
       )}
 
+      {/* v0.7.12.0：12 题进度小行 · 仅 >0 且非冷启时显示，不露 Q 编号 */}
+      {!isColdStart && qFullyCount > 0 && (
+        <div className="stats-line-pieces">
+          12 题里聊透 <AnimatedNumber value={qFullyCount} firstLoad /> 题
+        </div>
+      )}
+
       <style jsx>{`
         .stats-banner {
           /* 首次 600ms fade-in，跟 EmptyState 已有的 fade-in 节奏一致 */
@@ -267,6 +276,25 @@ export function StatsBanner() {
           display: flex;
           align-items: center;
           gap: 8px;
+        }
+
+        /* v0.7.12.0 新增：12 题进度小行 —— 比 stats-line-online 更小、更弱、更书卷气 */
+        .stats-line-pieces {
+          font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+          font-style: italic;
+          font-weight: 400;
+          font-size: 11px;
+          letter-spacing: 0.1em;
+          color: rgba(232, 180, 184, 0.42); /* 比 online 行还淡一档 · 不抢戏 */
+          line-height: 1.6;
+        }
+        .stats-line-pieces :global(.stats-number) {
+          font-family: "Manrope", "Inter Tight", sans-serif;
+          font-style: normal;
+          font-weight: 600;
+          font-size: 12px;
+          color: rgba(240, 232, 232, 0.85);
+          margin: 0 2px;
         }
 
         /* 呼吸金点：告诉用户"这个数字是活的" */

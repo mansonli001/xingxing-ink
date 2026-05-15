@@ -13,6 +13,7 @@ import { MicInput } from "./MicInput";
 import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 import { DrawerTriggerButton } from "./SideDrawer";
+import { ChatProgressHint } from "./chat/ChatProgressHint";
 
 interface ChatProps {
   mode: ModeId;
@@ -287,6 +288,9 @@ export function Chat({
           </p>
         </div>
       )}
+
+      {/* v0.7.12.0：Chat 顶部进度提示（第 3/6/9 轮触发一次） */}
+      <ChatProgressHint turnCount={turnCount} sessionId={sessionId} />
 
       {/* 消息列表 */}
       <div

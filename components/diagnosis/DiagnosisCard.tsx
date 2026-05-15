@@ -87,6 +87,17 @@ function IconHourglass({ className = "" }: { className?: string }) {
   );
 }
 
+// v0.7.12.1：警告三角形（forced BP 水印用）
+function IconWarn({ className = "" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 L21 19 H3 Z" />
+      <line x1="12" y1="10" x2="12" y2="14" />
+      <circle cx="12" cy="17" r="0.8" fill="currentColor" />
+    </svg>
+  );
+}
+
 function IconTarget({ className = "" }: { className?: string }) {
   return (
     <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -168,6 +179,24 @@ export function DiagnosisCard({ data }: Props) {
               <span>{accent.label}档</span>
             </span>
           </div>
+
+          {/* v0.7.12.1：未充分会诊水印（仅 forced=true 时显示） */}
+          {data.forced && (
+            <div
+              className="mb-6 px-4 py-3 rounded-xl border border-xx-gold/40 bg-xx-gold/8 text-xs sm:text-sm text-xx-gold/95 font-display flex items-start gap-2.5"
+              role="note"
+              aria-label="未充分会诊提示"
+            >
+              <IconWarn className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="leading-relaxed">
+                <span className="font-bold">未充分会诊 · 仅供参考。</span>
+                <span className="text-xx-gold/75">
+                  {" "}
+                  本次会诊轮次 / 覆盖度未达推荐门槛，姐写得再狠也只是浮在面儿上——回去把没聊到的口子聊清楚，再来出一份能晒的诊断书。
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* 进度条 */}
           <div>

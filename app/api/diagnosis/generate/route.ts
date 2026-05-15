@@ -54,6 +54,8 @@ interface GenerateRequestBody {
   sessionId?: string;
   turnCount?: number;
   qProgress?: number;
+  /** v0.7.12.1：用户被 gate 拦下后选择"强行出 BP"时为 true */
+  force?: boolean;
 }
 
 const VALID_MODES: ModeId[] = ["casual", "rational", "scathing"];
@@ -148,7 +150,10 @@ export async function POST(req: NextRequest) {
     ? await loadLedger(sessionId).catch(() => null)
     : null;
   const eligibility = checkBPEligibility(turnCount, ledgerForGate);
-  if (!eligibility.eligible) {
+  const force = body.force === true;
+
+  if (!eligibility.eligible && !force) {
+    // v0.7.12.1：返回更详细的 missingQuestions，让前端弹气泡 + bridge API 用
     return NextResponse.json(
       {
         ok: false,
@@ -161,10 +166,15 @@ export async function POST(req: NextRequest) {
           currentTurns: eligibility.currentTurns,
           currentCoverage: eligibility.currentCoverage,
         },
+        // v0.7.12.1：最缺的 1-2 题（前端弹气泡 + 调 bridge API 用）
+        missingQuestions: eligibility.missingQuestions,
       },
       { status: 422 }
     );
   }
+
+  // v0.7.12.1：force=true 时即使不达标也继续，但 report 标记 forced=true
+  const isForcedGeneration = !eligibility.eligible && force;
 
   // ---- 4. 生成诊断书（30s 超时由 maxDuration 控制） ----
   const reportId = generateReportId();
@@ -180,6 +190,10 @@ export async function POST(req: NextRequest) {
       // v0.7.12.0：把账本作为"参考事实"传给 generator（已在 gate 阶段读过）
       prefilledLedger: ledgerForGate ?? undefined,
     });
+    // v0.7.12.1：强行出 BP 时打 forced 标记，前端卡片会显示水印
+    if (isForcedGeneration) {
+      report = { ...report, forced: true };
+    }
   } catch (err) {
     const msg = (err as Error).message || "生成失败";
     console.error("[/api/diagnosis/generate] 生成失败：", msg);

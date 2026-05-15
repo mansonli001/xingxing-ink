@@ -27,6 +27,8 @@ export interface DiagnosisReport {
   createdAt: number;
   generatedFromTurns: number;
   qProgress: number;
+  /** v0.7.12.1：是否为"强行出 BP"（用户在被 gate 拦下后选择 force=true 时为 true） */
+  forced?: boolean;
 
   // 进度表
   progress: ProgressTable;

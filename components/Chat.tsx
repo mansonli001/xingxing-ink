@@ -14,6 +14,7 @@ import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 import { DrawerTriggerButton } from "./SideDrawer";
 import { ChatProgressHint } from "./chat/ChatProgressHint";
+import { BPGateDialog, type MissingQ } from "./chat/BPGateDialog";
 
 interface ChatProps {
   mode: ModeId;
@@ -29,6 +30,8 @@ interface ChatProps {
   sessionId?: string;
   qProgress?: number;
   onToast?: (msg: string) => void;
+  /** v0.7.12.1：BP gate 拦下后调 bridge 把醒醒追问注入对话流 */
+  onInjectAssistantMessage?: (content: string) => void;
 }
 
 export function Chat({
@@ -43,12 +46,33 @@ export function Chat({
   sessionId,
   qProgress,
   onToast,
+  onInjectAssistantMessage,
 }: ChatProps) {
   const [input, setInput] = useState("");
   /** v0.4：当前是否有 AI 消息在播放语音（驱动人像呼吸动效） */
   const [isSpeaking, setIsSpeaking] = useState(false);
   /** v0.7.11：诊断书生成中 loading（防止重复点击） */
   const [generatingDiagnosis, setGeneratingDiagnosis] = useState(false);
+  /** v0.7.12.1：BP gate 拦截弹窗状态 */
+  const [gateDialog, setGateDialog] = useState<{
+    open: boolean;
+    message: string;
+    missingQuestions: MissingQ[];
+    gate?: {
+      missingRounds: number;
+      missingCoverage: number;
+      currentTurns: number;
+      currentCoverage: number;
+    };
+    loadingContinue: boolean;
+    loadingForce: boolean;
+  }>({
+    open: false,
+    message: "",
+    missingQuestions: [],
+    loadingContinue: false,
+    loadingForce: false,
+  });
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -110,7 +134,172 @@ export function Chat({
   const locked = messages.length > 0;
   const currentMeta = MODE_META[mode];
 
+  // ============================================================
+  // v0.7.12.1：诊断书生成主流程（含 BP gate 拦截 + bridge 追问 + force 强出）
+  // ============================================================
+
+  /**
+   * 调 /api/diagnosis/generate
+   * @param force 是否带 force=true（强行出 BP）
+   * @returns true=已跳转  false=被拦/失败
+   */
+  async function runGenerate(force: boolean): Promise<boolean> {
+    if (streaming) return false;
+
+    const cleanMessages = messages
+      .filter((m) => m.done !== false && m.content?.trim())
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    if (cleanMessages.length < 4) {
+      onToast?.("再多聊几句吧，姐还看不出门道");
+      return false;
+    }
+
+    setGeneratingDiagnosis(true);
+    track("diagnosis_clicked", {
+      mode,
+      turn_index: turnCount,
+    });
+    onToast?.(force ? "硬写中，约 30 秒…" : "醒醒在写诊断书，约 30 秒…");
+    const midwayHint = setTimeout(() => {
+      onToast?.("再等等，姐还在挥刀…");
+    }, 15000);
+
+    try {
+      const res = await fetch("/api/diagnosis/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: cleanMessages,
+          mode,
+          sessionId,
+          turnCount,
+          qProgress,
+          ...(force ? { force: true } : {}),
+        }),
+      });
+      const data = await res.json();
+      clearTimeout(midwayHint);
+
+      // v0.7.12.1：422 = BP gate 拦截 → 弹气泡（仅非 force 时触发）
+      if (res.status === 422 && data?.gate && Array.isArray(data?.missingQuestions)) {
+        setGeneratingDiagnosis(false);
+        setGateDialog({
+          open: true,
+          message: typeof data.error === "string" ? data.error : "再聊几轮姐才能写透",
+          missingQuestions: data.missingQuestions as MissingQ[],
+          gate: data.gate,
+          loadingContinue: false,
+          loadingForce: false,
+        });
+        track("diagnosis_gate_blocked", {
+          mode,
+          turn_index: turnCount,
+          missing_rounds: data.gate?.missingRounds ?? 0,
+          missing_coverage: data.gate?.missingCoverage ?? 0,
+        });
+        return false;
+      }
+
+      if (!res.ok || !data.ok) {
+        onToast?.(data.error || "生成失败，等几秒再试");
+        setGeneratingDiagnosis(false);
+        return false;
+      }
+
+      // 同 tab 跳转 · 对话已持久化在 localStorage，跳走再回来不丢
+      window.location.href = data.url;
+      return true;
+    } catch (err) {
+      clearTimeout(midwayHint);
+      console.error("[diagnosis] 网络错误", err);
+      onToast?.("网络断了，再试一次");
+      setGeneratingDiagnosis(false);
+      return false;
+    }
+  }
+
+  /**
+   * 用户在 gate 弹窗点「继续聊」→ 调 bridge 注入醒醒口吻追问
+   */
+  async function handleContinueChatFromGate() {
+    setGateDialog((prev) => ({ ...prev, loadingContinue: true }));
+    track("diagnosis_gate_continue_chat", {
+      mode,
+      turn_index: turnCount,
+    });
+
+    try {
+      const res = await fetch("/api/diagnosis/bridge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          sessionId,
+          missingQuestions: gateDialog.missingQuestions,
+        }),
+      });
+      const data = await res.json();
+
+      const content =
+        (res.ok && data?.ok && typeof data.content === "string" && data.content.trim()) ||
+        (typeof data?.fallback === "string" ? data.fallback.trim() : "");
+
+      if (content) {
+        onInjectAssistantMessage?.(content);
+        setGateDialog({
+          open: false,
+          message: "",
+          missingQuestions: [],
+          loadingContinue: false,
+          loadingForce: false,
+        });
+        // 滚动到底部
+        setTimeout(() => {
+          listRef.current?.scrollTo({
+            top: listRef.current.scrollHeight,
+            behavior: "smooth",
+          });
+        }, 100);
+      } else {
+        onToast?.("醒醒走神了，再点一下");
+        setGateDialog((prev) => ({ ...prev, loadingContinue: false }));
+      }
+    } catch (err) {
+      console.error("[bridge] 网络错误", err);
+      onToast?.("网络断了，再试一次");
+      setGateDialog((prev) => ({ ...prev, loadingContinue: false }));
+    }
+  }
+
+  /**
+   * 用户在 gate 弹窗点「硬要现在出 BP」→ force=true 重发 generate
+   */
+  async function handleForceGenerateFromGate() {
+    setGateDialog((prev) => ({ ...prev, loadingForce: true }));
+    track("diagnosis_gate_force_generate", {
+      mode,
+      turn_index: turnCount,
+    });
+    const ok = await runGenerate(true);
+    if (!ok) {
+      setGateDialog((prev) => ({ ...prev, loadingForce: false }));
+    }
+    // ok=true 时已经跳转，不需要关弹窗
+  }
+
+  function handleCloseGate() {
+    setGateDialog({
+      open: false,
+      message: "",
+      missingQuestions: [],
+      loadingContinue: false,
+      loadingForce: false,
+    });
+  }
+
   return (
+    <>
     <div className="relative flex h-full w-full flex-col" data-mode={mode}>
       {/* 全屏剪影背景 —— 视口级 fixed，滚动不跟跑、气泡区独立滚动
           放在最外层最前面，z-0 打底 */}
@@ -142,63 +331,9 @@ export function Chat({
             {turnCount >= 2 ? (
               <button
                 type="button"
-                onClick={async () => {
+                onClick={() => {
                   if (generatingDiagnosis || streaming) return;
-
-                  // 准备给后端的 messages（去掉 streaming 中的、空的、内部状态字段）
-                  const cleanMessages = messages
-                    .filter((m) => m.done !== false && m.content?.trim())
-                    .map((m) => ({
-                      role: m.role,
-                      content: m.content,
-                    }));
-
-                  if (cleanMessages.length < 4) {
-                    onToast?.("再多聊几句吧，姐还看不出门道");
-                    return;
-                  }
-
-                  setGeneratingDiagnosis(true);
-                  track("diagnosis_clicked", {
-                    mode,
-                    turn_index: turnCount,
-                  });
-                  // v0.7.11.1：开始就 toast 给预期，避免用户以为卡了
-                  onToast?.("醒醒在写诊断书，约 30 秒…");
-                  // 15s 后还没好就再提示一次（仍然在跑）
-                  const midwayHint = setTimeout(() => {
-                    onToast?.("再等等，姐还在挥刀…");
-                  }, 15000);
-
-                  try {
-                    const res = await fetch("/api/diagnosis/generate", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        messages: cleanMessages,
-                        mode,
-                        sessionId,
-                        turnCount,
-                        qProgress,
-                      }),
-                    });
-                    const data = await res.json();
-                    clearTimeout(midwayHint);
-
-                    if (!res.ok || !data.ok) {
-                      onToast?.(data.error || "生成失败，等几秒再试");
-                      setGeneratingDiagnosis(false);
-                      return;
-                    }
-
-                    // 同 tab 跳转 · 对话已经持久化在 localStorage，跳走再回来不丢
-                    window.location.href = data.url;
-                  } catch (err) {
-                    clearTimeout(midwayHint);
-                    console.error("[diagnosis] 网络错误", err);
-                    onToast?.("网络断了，再试一次");
-                    setGeneratingDiagnosis(false);
-                  }
+                  void runGenerate(false);
                 }}
                 disabled={generatingDiagnosis || streaming}
                 className={[
@@ -396,6 +531,20 @@ export function Chat({
         </div>
       </div>
     </div>
+
+    {/* v0.7.12.1：BP 拦截弹窗 —— 用户聊够轮但没聊够题时点出 BP 触发 */}
+    <BPGateDialog
+      open={gateDialog.open}
+      message={gateDialog.message}
+      missingQuestions={gateDialog.missingQuestions}
+      gate={gateDialog.gate}
+      loadingContinue={gateDialog.loadingContinue}
+      loadingForce={gateDialog.loadingForce}
+      onContinueChat={handleContinueChatFromGate}
+      onForceGenerate={handleForceGenerateFromGate}
+      onClose={handleCloseGate}
+    />
+    </>
   );
 }
 

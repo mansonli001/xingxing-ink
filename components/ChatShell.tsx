@@ -233,6 +233,25 @@ export function ChatShell() {
     setMode(next);
   }
 
+  /**
+   * v0.7.12.1：把一条 assistant 消息直接塞到对话流末尾。
+   * 用于 BP gate 拦截后调 /api/diagnosis/bridge 注入醒醒口吻追问。
+   * 不走 stream 链路（这条消息不是 LLM 真聊出来的，是 bridge 生成后注入的）。
+   */
+  function injectAssistantMessage(content: string) {
+    if (!content?.trim()) return;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "assistant",
+        content: content.trim(),
+        done: true,
+        mode,
+      },
+    ]);
+  }
+
   async function sendMessageWith(rawText: string) {
     const text = rawText.trim();
     if (!text || streaming) return;
@@ -474,6 +493,7 @@ export function ChatShell() {
         sessionId={sessionId}
         qProgress={qProgress}
         onToast={setToastMsg}
+        onInjectAssistantMessage={injectAssistantMessage}
       />
       <SideDrawer
         open={drawerOpen}

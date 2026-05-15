@@ -32,6 +32,9 @@ export type AnalyticsEvent =
   | "message_sent" //          发了一条消息（含每轮 turn_index）
   | "followup_clicked" //      点了「追问这一段」
   | "diagnosis_clicked" //     v0.7.9.9：点了「出诊断书」按钮（衡量诊断书入口转化）
+  | "diagnosis_gate_blocked" //         v0.7.12.1：BP gate 拦截触发（缺轮/缺覆盖）
+  | "diagnosis_gate_continue_chat" //   v0.7.12.1：被拦后选「继续聊」→ 调 bridge
+  | "diagnosis_gate_force_generate" //  v0.7.12.1：被拦后选「硬要现在出 BP」
   // 异常
   | "api_error"; //            调 deepseek 接口失败
 

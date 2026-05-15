@@ -8,6 +8,84 @@
 
 ---
 
+## [v0.7.12.1] - 2026-05-15 — 「BP 拦截 = 触发姐姐主动追问，不是干巴巴报错」
+
+> v0.7.12.0 上线后真机发现：聊 11 轮被拦下，文案只说「再补 N 块拼图」，用户不知道缺什么、姐姐也没主动来问。
+> 本版把「拦截」从"错误反馈"重写成"姐姐拦你一下接着追问"——调性最强方案。
+
+### Added
+
+- **`lib/diagnosis/bp-gate.ts`** 新增 `getMissingQuestions(ledger)`：
+  - 按 12 题优先级（Q1>Q2>Q4>Q6>Q3>Q5>Q7>Q9>Q10>Q11>Q8>Q12）返回最缺的 1-2 题
+  - 题号 + 题名 + 当前 blades 全带回前端
+- **`lib/diagnosis/types.ts`** `DiagnosisReport` 新增 `forced?: boolean` 字段
+- **`app/api/diagnosis/bridge/route.ts`** 新建（~280 行）：
+  - 入参：mode + missingQuestions + sessionId
+  - 调 deepseek-chat 用当前档位口吻生成「等等姐还有 X 件事问你」追问
+  - 三档差异化 system prompt（行业百事通 / 资深合伙人 / 直觉怪兽）
+  - LLM 失败兜底文案，绝不让前端无内容可注
+  - 复用诊断书限流（防刷成本）
+- **`components/chat/BPGateDialog.tsx`** 新建（~170 行）：
+  - 暗夜玫瑰风弹窗 · 三按钮（继续聊 / 强行出 BP / 关闭）
+  - 露出最缺的 1-2 题题名（人话，不露 Q 编号）
+  - ESC 关闭 + 自动聚焦推荐按钮
+  - 「继续聊」是主按钮（玫瑰红） · 「硬要现在出」是次按钮
+- **`components/ChatShell.tsx`** 新增 `injectAssistantMessage(content)` 函数（暴露给 Chat）
+- **`lib/analytics.ts`** 新增 3 个事件类型：
+  - `diagnosis_gate_blocked` · gate 拦截触发
+  - `diagnosis_gate_continue_chat` · 选「继续聊」
+  - `diagnosis_gate_force_generate` · 选「强行出」
+
+### Changed
+
+- **`app/api/diagnosis/generate/route.ts`**：
+  - `body` 接受新字段 `force?: boolean`
+  - 422 响应新增 `missingQuestions` 数组（前端弹气泡用）
+  - `force=true` 时跳过门槛检查，但 report 标记 `forced: true`
+- **`components/diagnosis/DiagnosisCard.tsx`**：
+  - 顶部档位标签下方新增「未充分会诊 · 仅供参考」金色水印 banner（仅 `forced=true` 时显示）
+  - 新增 `IconWarn` SVG（警告三角形）
+- **`components/Chat.tsx`** 出 BP 按钮 onClick 全面重构：
+  - 抽出 `runGenerate(force)` 顶层函数
+  - 422 → 弹 BPGateDialog 而不是 toast 错误
+  - 加 `handleContinueChatFromGate` / `handleForceGenerateFromGate` / `handleCloseGate` 三个 handler
+  - 新增 `onInjectAssistantMessage` prop（接 ChatShell 的 injectAssistantMessage）
+- **`lib/diagnosis/bp-gate.ts`** `buildMessage` 升级：
+  - 单缺覆盖时不再说「再补 N 块拼图」，改说「姐还有「凭什么是你」+「成本」没问到呢」
+  - 露题名（人话）但仍不露 Q 编号
+
+### 用户体验流程
+
+```
+用户聊 11 轮 → 点「出诊断书」
+        ↓
+后端 422 + missingQuestions: [{qid:3, name:"凭什么是你"}, ...]
+        ↓
+前端弹 BPGateDialog（暗夜玫瑰风弹窗）：
+  ┌──────────────────────────────────┐
+  │ 等等——姐还想问你两件事             │
+  │                                   │
+  │ 「凭什么是你」+「成本结构」没问到   │
+  │                                   │
+  │ [好，继续聊（推荐）] ← 玫瑰红主按钮 │
+  │ [硬要现在出（带「未充分会诊」水印）] │
+  │ [算了，我再想想]                   │
+  └──────────────────────────────────┘
+        ↓
+点「继续聊」→ 调 /api/diagnosis/bridge → 醒醒口吻追问注入对话流
+        OR
+点「硬要现在出」→ generate?force=true → BP 顶部显示金色水印 banner
+```
+
+### 验证
+
+- tsc 0 error / next build ✓
+- 首页 72.0 → 73.4 kB（+1.4 KB · 含 BPGateDialog）
+- 新增路由 `/api/diagnosis/bridge` 已注册（dynamic）
+- 主对话流式链路 0 影响
+
+---
+
 ## [v0.7.12.0] - 2026-05-15 — 「Q 账本地基 + BP 门槛升级 + 外部评测漏洞修复」
 
 > 外部专家提交 22 条评测意见，本版分类吸收：12 条直接落地 + 4 条转译落地 + 6 条记到 v0.7.13+。

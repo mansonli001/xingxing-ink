@@ -31,6 +31,7 @@ export type AnalyticsEvent =
   | "preset_tip_clicked" //    点了 EmptyState 的示例 tip 一键发送
   | "message_sent" //          发了一条消息（含每轮 turn_index）
   | "followup_clicked" //      点了「追问这一段」
+  | "diagnosis_clicked" //     v0.7.9.9：点了「出诊断书」按钮（衡量诊断书入口转化）
   // 异常
   | "api_error"; //            调 deepseek 接口失败
 

@@ -127,27 +127,73 @@ export function Chat({
               第 <span className="font-medium" style={{ color: "var(--mode-color)" }}>{turnCount}</span> 轮过招
             </span>
           </div>
-          <button
-            type="button"
-            onClick={clearAll}
-            className="text-[11px] text-xx-text-dim hover:text-xx-gold transition-colors flex items-center gap-1"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-3 w-3"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          <div className="flex items-center gap-3">
+            {/* v0.7.9.9：出诊断书按钮 —— turnCount≥2 才显示，离线版直接跳 demo */}
+            {turnCount >= 2 ? (
+              <a
+                href={`/diagnosis/demo?mode=${
+                  mode === "casual"
+                    ? "temperate"
+                    : mode === "rational"
+                    ? "surgical"
+                    : "scathing"
+                }&from=chat`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  track("diagnosis_clicked", {
+                    mode,
+                    turn_index: turnCount,
+                  });
+                }}
+                className={[
+                  "text-[11px] transition-colors flex items-center gap-1",
+                  streaming
+                    ? "text-xx-text-dim/50 pointer-events-none cursor-not-allowed"
+                    : "text-xx-text-dim hover:text-xx-gold",
+                ].join(" ")}
+                aria-label="为本次对话生成诊断书"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-3 w-3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="9" y1="13" x2="15" y2="13" />
+                  <line x1="9" y1="17" x2="13" y2="17" />
+                </svg>
+                出诊断书
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-[11px] text-xx-text-dim hover:text-xx-gold transition-colors flex items-center gap-1"
             >
-              <path d="M3 6h18" />
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            </svg>
-            清空重开
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              </svg>
+              清空重开
+            </button>
+          </div>
         </div>
       ) : (
         /* 未开始对话：显示模式选择区 */

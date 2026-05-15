@@ -134,3 +134,46 @@ export const Q_LAYER: Record<number, "business" | "product" | "founder"> = {
   11: "product",
   12: "founder",
 };
+
+// ============================================================
+// v0.7.12.0 新增 · Q 账本（QLedger）
+//
+// 用于把醒醒"心里过一遍"的 Q 进度从 prompt 升级为持久化真账本。
+// 每轮主对话流式回复完成后，由轻量判官 LLM 异步推断本轮挥刀增量，
+// 累计写入 KV `session:{id}:ledger`（TTL 90 天）。
+//
+// 与 ProgressTable 的区别：
+//   - ProgressTable = 终态报告快照（生成诊断书时定格）
+//   - QLedger       = 实时账本（每轮更新，用于驱动 BP 门槛 + UI 提示）
+// ============================================================
+
+export interface QLedgerEntry {
+  questionId: number; // 1-12
+  blades: number; // 0-3 已挥几把刀
+  userQuotes: string[]; // 截至目前的用户原话片段（最多 3 条，每条 ≤ 80 字）
+  lastUpdatedTurn: number; // 最后更新于第几轮
+}
+
+export interface QLedger {
+  sessionId: string;
+  mode: "casual" | "rational" | "scathing";
+  totalTurns: number;
+  entries: Record<number, QLedgerEntry>; // key = questionId 1-12
+  fullyCovered: number[]; // blades === 3 的题号
+  halfCovered: number[]; // blades 1-2 的题号
+  notCovered: number[]; // blades === 0 的题号
+  updatedAt: number;
+}
+
+/**
+ * 判官 LLM 返回的本轮挥刀增量
+ * - bladesIncrement 是「增量」（+1/+2），不是绝对值
+ * - userQuote 是这一刀挥到的具体用户原话证据
+ */
+export interface LedgerIncrement {
+  updates: Array<{
+    questionId: number;
+    bladesIncrement: number; // +1 / +2
+    userQuote: string; // ≤ 80 字
+  }>;
+}

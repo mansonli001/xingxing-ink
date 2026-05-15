@@ -16,6 +16,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DiagnosisCard } from "@/components/diagnosis/DiagnosisCard";
+import { DiagnosisToolbar } from "@/components/diagnosis/DiagnosisToolbar";
 import { getDemoReport } from "@/lib/diagnosis/demo";
 
 export const dynamic = "force-dynamic";
@@ -87,23 +88,26 @@ export default async function DiagnosisPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-xx-bg text-xx-text">
       <header className="sticky top-0 z-40 backdrop-blur-md bg-xx-bg/85 border-b border-xx-border-soft">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
           <Link
             href="/"
-            className="flex items-center gap-2 text-xx-text hover:text-xx-rose transition-colors"
+            className="flex items-center gap-2 text-xx-text hover:text-xx-rose transition-colors shrink-0"
           >
             <span className="text-xl">⏰</span>
             <span className="font-serif font-bold">醒醒</span>
           </Link>
 
-          <span className="text-xs text-xx-text-dim font-display tracking-wider">
-            诊断书 · {id}
-          </span>
+          <DiagnosisToolbar
+            mode={data.mode}
+            snapshotTargetId="diagnosis-snapshot"
+          />
         </div>
       </header>
 
-      <main className="px-6 py-10 sm:py-16">
-        <DiagnosisCard data={data} />
+      <main className="px-4 sm:px-6 py-8 sm:py-12">
+        <div id="diagnosis-snapshot" className="bg-xx-bg pb-6">
+          <DiagnosisCard data={data} />
+        </div>
 
         {/* 底部 CTA */}
         <section className="max-w-3xl mx-auto mt-12 text-center">

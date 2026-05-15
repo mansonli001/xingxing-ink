@@ -128,16 +128,11 @@ export function Chat({
             </span>
           </div>
           <div className="flex items-center gap-3">
-            {/* v0.7.9.9：出诊断书按钮 —— turnCount≥2 才显示，离线版直接跳 demo */}
+            {/* v0.7.9.9：出诊断书按钮 —— turnCount≥2 才显示，离线版直接跳 demo
+                v0.7.9.10：mode 直接透传主产品档位（casual/rational/scathing），demo 页内部按 ModeId 取数据 */}
             {turnCount >= 2 ? (
               <a
-                href={`/diagnosis/demo?mode=${
-                  mode === "casual"
-                    ? "temperate"
-                    : mode === "rational"
-                    ? "surgical"
-                    : "scathing"
-                }&from=chat`}
+                href={`/diagnosis/demo?mode=${mode}&from=chat`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {

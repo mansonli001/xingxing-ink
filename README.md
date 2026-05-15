@@ -21,8 +21,8 @@
 | **是什么** | 御姐人格 AI 对话产品。打工人/创业者把模糊想法丢给"醒醒姐"，三档语气把你怼/熬/拆清楚。 |
 | **谁在用** | 想做副业的打工人 · 想验证 idea 的产品人 · 自我感动的早期创业者 |
 | **核心价值** | ① 不哄你（别的 AI 都太顺毛） ② 12 问框架（不是闲聊，是结构化拆解） ③ 一份"诊断书"BP（聊够 4 轮可生成） |
-| **当前版本** | **v0.7.11.2**（2026-05-15）· 主页 BP 计数 + 诊断书全面去 emoji |
-| **下一站** | v0.7.11.x 小步快跑 · v2.0 后接小红书冷启 |
+| **当前版本** | **v0.7.12.0**（2026-05-15）· Q 账本地基 + BP 门槛升级 + 外部评测漏洞修复 |
+| **下一站** | v0.7.13 真机 UX 优化 · v2.0 后接小红书冷启 |
 | **品牌护城河** | 私藏的「**醒醒方法论矩阵**」（独立 private repo，open-source 主仓库不含） |
 
 ---
@@ -444,13 +444,49 @@ v0.7.9.7.8 · 安全 P0（限流 + CSP/X-Frame 等 5 头）
 v0.7.9.8~10 · 诊断书展示页 + Header 重构 + 离线 demo
 v0.7.11    · ⭐ 诊断书全链路打通（LLM 生成 + KV 持久化）
 v0.7.11.1  · 诊断书手机长图 4 项体验优化
-v0.7.11.2  · ⭐ 主页加「锤出 X 份 BP」+ 诊断书全面去 emoji（当前）
+v0.7.11.2  · 主页加「锤出 X 份 BP」+ 诊断书全面去 emoji
+v0.7.12.0  · ⭐ Q 账本地基 + BP 门槛升级 + 外部评测漏洞修复（当前）
 ```
 
-### 当前版本 v0.7.11.2 详情（2026-05-15）
+### 当前版本 v0.7.12.0 详情（2026-05-15）
 
-**Added · 主页 BP 计数闭环**
-- `lib/stats/keys.ts` 新增 `K_TOTAL_BP_COUNT` + `K_DAILY_BP_COUNT`
+**Added · Q 账本地基（外部评测意见 #11/#14 救命）**
+- `lib/diagnosis/q-ledger.ts` 新建：纯函数账本核心（hasUserFact / makeEmptyLedger / mergeIncrement / computeNewlyFullyCovered / loadLedger / saveLedger）
+- `lib/diagnosis/q-ledger-judge.ts` 新建：fire-and-forget 轻量判官 LLM（deepseek-chat / temp=0.2 / max_tokens=300 / json_object）
+- `lib/diagnosis/bp-gate.ts` 新建：BP 生成门槛（≥6 轮 + 有效覆盖≥4）
+- KV `session:{id}:ledger` TTL 90 天 + 全站累计 `stats:total:q_fully_covered`
+- `app/api/chat/stream/route.ts` 流式回复 done 后 fire-and-forget 触发判官
+- 性能兜底：用户消息无 hasUserFact 时跳过判官（防虚高 + 省钱）
+
+**Changed · 救命修复（外部评测吸收）**
+- BP 生成门槛 ≥2 轮 → ≥6 轮 + 有效覆盖≥4（防空洞 BP 伤口碑 · 评测意见 #10）
+- generator.ts 新增 prefilledLedger 入参，注入账本作"参考事实"减少 LLM 幻觉
+- diagnosis/generate API 限流后追加 BP 门槛闸，不达标返 422 + friendly error
+
+**Added · 用户感知**
+- StatsBanner 在线行下方加新一小行「12 题里聊透 X 题」（仅 >0 且非冷启时显示）
+- ChatProgressHint 第 3/6/9 轮触发顶部一行 toast（不露 Q 编号 · 6 秒淡出）
+
+**Fixed · 外部评测漏洞修复**
+- emoji 漏修：`app/diagnosis/[id]/page.tsx` + `demo/page.tsx` 页头 ⏰ → IconHourglass SVG
+- emoji 漏修：`DiagnosisToolbar.tsx` 三档 🌿❄️🔥 → IconLeaf/IconSnow/IconFlame SVG
+- emoji 漏修：`lib/diagnosis/demo.ts` 正文 ✅⚠️❌ → 纯文字标签
+- OG `Cache-Control` 1h → 24h + stale-while-revalidate=7d（OG 6.5s 慢修复）
+- `package.json` version 0.1.0 → 0.7.12.0（与 SemVer 叙事对齐）
+- `ROADMAP.md` 同步到 v0.7.12.0 + 近月三大重点
+
+**Cost / Performance**
+- 判官调用 ~300ms（fire-and-forget 用户感知不到）
+- 判官成本 ~$0.0001/轮 · 1000 轮约 ¥0.7
+- 首页体积 +0.3KB（StatsBanner 小行 + AnimatedNumber 复用）
+- 主对话流式链路 0 影响（双链路解耦）
+
+**Quality Gate · 4 commit 推送**
+- commit 1/4 数据层：`0783486` · 类型 + 4 模块（586 insertions）
+- commit 2/4 聊天层：`5b63f06` · fire-and-forget + 门槛 + 吃账本（192 insertions）
+- commit 3/4 闭环层：`b7d96ec` · summary API + 小行 + Chat 提示 + OG cache（187 insertions）
+- commit 4/4 修缮层：本次提交
+- tsc 0 error / 0 lint / next build 通过 / 0 主链路回归
 - `app/api/diagnosis/generate` KV 写诊断书成功后 incr 累计 + 当日（自动续 TTL）
 - `app/api/stats/summary` 返回字段新增 `totalBpCount`
 - `components/StatsBanner.tsx` 大行追加「· 锤出 X 份 BP」（仅 >0 时显示）
@@ -475,7 +511,7 @@ v0.7.11.2  · ⭐ 主页加「锤出 X 份 BP」+ 诊断书全面去 emoji（当
 ## 11. 路线图（精炼版 · 完整版见 ROADMAP）
 
 ```
-v0.7.11.2 当前 ─────────────┐
+v0.7.12.0 当前 ─────────────┐
                             │ (近 2 周-1 个月)
                             ▼
 近月 P0 三件事：

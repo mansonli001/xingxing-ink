@@ -1,27 +1,30 @@
 "use client";
 
 /**
- * 诊断书工具栏（客户端组件）· v0.7.9.10
+ * 诊断书工具栏（客户端组件）· v0.7.12.0
  *
  * 设计逻辑：
  *   诊断书 = 用户在某个档位下聊出来的产物 → 档位已锁定，不可切换
  *   顶部右侧应当是「操作」而非「切换」
  *
  * 包含：
- *   1. 档位展示 pill（emoji + 档位名）
+ *   1. 档位展示 pill（SVG icon + 档位名）
  *   2. 「保存长图」按钮 → 用 html2canvas 截整个 #diagnosis-snapshot DOM
+ *
+ * v0.7.12.0 变更：emoji → SVG（外部评测 #3）
+ *   🌿 → IconLeaf（树叶/温和）
+ *   ❄️ → IconSnow（雪花/手术刀）
+ *   🔥 → IconFlame（火焰/扇巴掌）
  *
  * 使用方式：
  *   <DiagnosisToolbar mode="scathing" snapshotTargetId="diagnosis-snapshot" />
  *   - 父页面需把诊断书内容包在 <div id="diagnosis-snapshot"> 里
  */
 
-import { useState } from "react";
-
-type ModeId = "casual" | "rational" | "scathing" | "temperate" | "surgical";
+import { useState, type ReactNode } from "react";
 
 interface ModeDisplay {
-  emoji: string;
+  icon: ReactNode;
   label: string;
   pillClass: string;
 }
@@ -29,28 +32,28 @@ interface ModeDisplay {
 const MODE_DISPLAY: Record<string, ModeDisplay> = {
   // 主产品三档
   casual: {
-    emoji: "🌿",
+    icon: <IconLeaf className="w-3.5 h-3.5" />,
     label: "随便聊档",
     pillClass: "bg-xx-purple/15 text-xx-purple border-xx-purple/40",
   },
   rational: {
-    emoji: "❄️",
+    icon: <IconSnow className="w-3.5 h-3.5" />,
     label: "讲道理档",
     pillClass: "bg-xx-gold/10 text-xx-gold border-xx-gold/40",
   },
   scathing: {
-    emoji: "🔥",
+    icon: <IconFlame className="w-3.5 h-3.5" />,
     label: "扇巴掌档",
     pillClass: "bg-xx-rose/15 text-xx-rose border-xx-rose/40",
   },
   // 诊断书三档（兼容）
   temperate: {
-    emoji: "🌿",
+    icon: <IconLeaf className="w-3.5 h-3.5" />,
     label: "温和档",
     pillClass: "bg-xx-purple/15 text-xx-purple border-xx-purple/40",
   },
   surgical: {
-    emoji: "❄️",
+    icon: <IconSnow className="w-3.5 h-3.5" />,
     label: "手术刀档",
     pillClass: "bg-xx-gold/10 text-xx-gold border-xx-gold/40",
   },
@@ -149,7 +152,7 @@ export function DiagnosisToolbar({
         ].join(" ")}
         aria-label={`本次会诊档位：${display.label}`}
       >
-        <span>{display.emoji}</span>
+        {display.icon}
         <span>{display.label}</span>
       </span>
 
@@ -212,5 +215,69 @@ export function DiagnosisToolbar({
         </span>
       ) : null}
     </div>
+  );
+}
+
+// ============================================================
+// SVG 图标（与 DiagnosisCard 同一套规范：24×24 / stroke=1.5 / currentColor）
+// v0.7.12.0：emoji 🌿❄️🔥 全替换为 SVG，去 emoji 痕迹
+// ============================================================
+
+function IconLeaf({ className = "" }: { className?: string }) {
+  // 树叶：温和、生长感
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 20A7 7 0 0 1 4 13C4 8 8 4 14 4c4 0 6 2 6 5 0 6-4 11-9 11Z" />
+      <path d="M11 20c0-4 2-8 5-11" />
+    </svg>
+  );
+}
+
+function IconSnow({ className = "" }: { className?: string }) {
+  // 雪花：理性、冰冷、规整
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="12" y1="2" x2="12" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="5" y1="5" x2="19" y2="19" />
+      <line x1="19" y1="5" x2="5" y2="19" />
+    </svg>
+  );
+}
+
+function IconFlame({ className = "" }: { className?: string }) {
+  // 火焰：扇巴掌、燃烧、暴烈
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8.5 14a4 4 0 0 0 7 0c0-3-3-4-3-7-1.5 1-3 2.5-3 4.5 0 1.5-1 2.5-1 2.5Z" />
+      <path d="M12 22c-4 0-7-3-7-7 0-3 2-5 3-7 .5 2 2 3 2 3s.5-3 2-5c0 0 1 1 1 3s-1 4 0 5c1 1 2 2 2 4 0 2-1 4-3 4Z" />
+    </svg>
   );
 }

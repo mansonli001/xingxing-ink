@@ -50,7 +50,7 @@ export default async function DiagnosisDemoPage({ searchParams }: PageProps) {
             href="/"
             className="flex items-center gap-2 text-xx-text hover:text-xx-rose transition-colors shrink-0"
           >
-            <span className="text-xl">⏰</span>
+            <IconHourglass className="w-5 h-5" />
             <span className="font-serif font-bold">醒醒</span>
           </Link>
 
@@ -87,14 +87,36 @@ export default async function DiagnosisDemoPage({ searchParams }: PageProps) {
 
       {/* Footer */}
       <footer className="border-t border-xx-border-soft py-8 text-center text-xs text-xx-text-dim">
-        <p>
-          ⏰ 醒醒诊断书 · v1.0 · 由{" "}
+        <p className="inline-flex items-center justify-center gap-1.5">
+          <IconHourglass className="w-3.5 h-3.5" />
+          <span>醒醒诊断书 · v1.0 · 由</span>{" "}
           <Link href="/" className="hover:text-xx-rose transition-colors">
             xingxing.starfluxes.com
           </Link>{" "}
-          生成
+          <span>生成</span>
         </p>
       </footer>
     </div>
+  );
+}
+
+// ============================================================
+// SVG 图标（与 DiagnosisCard 同一套规范：24×24 / stroke=1.5 / currentColor）
+// ============================================================
+function IconHourglass({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 14" />
+    </svg>
   );
 }

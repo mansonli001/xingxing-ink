@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * 醒醒 · BP 拦截弹窗（v0.7.12.1 新增）
+ * 醒醒 · BP 拦截弹窗 v0.7.12.2 · 表单版
  *
  * 触发条件：用户聊天中点「出诊断书」按钮，但被后端 gate 拦下（HTTP 422）
  *
- * 用户三选一：
- *   1. 继续聊 → 触发 onContinueChat（父组件去调 /api/diagnosis/bridge 注入追问）
- *   2. 强行出 BP → 触发 onForceGenerate（父组件用 force=true 重发 generate）
- *   3. 关闭 → 触发 onClose（用户改主意，啥也不做）
+ * 用户在弹窗里直接答缺的题，三选一：
+ *   1. 答完出诊断书 → 答案合并塞回对话流 → force=true 出 BP
+ *   2. 跳过这俩硬出 → 不答，直接 force=true 出 BP（带「未充分会诊」水印）
+ *   3. 关闭 → 啥也不做
  *
  * 设计原则：
- *   - 不要"错误"感，要"姐拦你一下"感
- *   - 露出最缺的 1-2 题题名（用人话，不露 Q 编号）
- *   - 默认聚焦"继续聊"按钮（推荐路径）
+ *   - 弹窗内闭环，不依赖回到主对话流让用户去答
+ *   - 答案为空也允许提交 → 走"硬出"路径
+ *   - 调 bridge 拿三档差异化的姐姐口吻 prompt
+ *   - LLM 失败用静态兜底，保证弹窗永远有内容可填
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface MissingQ {
   qid: number;
@@ -24,20 +25,29 @@ export interface MissingQ {
   blades: number;
 }
 
+export interface BridgeQuestion {
+  qid: number;
+  name: string;
+  prompt: string; // 姐姐口吻的两段式追问
+}
+
 interface Props {
   open: boolean;
-  message: string; // 后端 gate.message
+  message: string;
   missingQuestions: MissingQ[];
+  /** 调 bridge 拿到的具体追问问题；undefined 表示还在加载 */
+  bridgeQuestions: BridgeQuestion[] | undefined;
+  bridgeLoading: boolean;
   gate?: {
     missingRounds: number;
     missingCoverage: number;
     currentTurns: number;
     currentCoverage: number;
   };
-  loadingContinue?: boolean; // 调 bridge API 中
-  loadingForce?: boolean; // 强出 BP 调 generate 中
-  onContinueChat: () => void;
-  onForceGenerate: () => void;
+  loadingSubmit?: boolean; // 提交答案 + 出 BP 中
+  loadingForce?: boolean; // 跳过直接出 BP 中
+  onSubmitAnswers: (answers: Record<number, string>) => void;
+  onForceSkip: () => void;
   onClose: () => void;
 }
 
@@ -45,41 +55,55 @@ export function BPGateDialog({
   open,
   message,
   missingQuestions,
+  bridgeQuestions,
+  bridgeLoading,
   gate,
-  loadingContinue,
+  loadingSubmit,
   loadingForce,
-  onContinueChat,
-  onForceGenerate,
+  onSubmitAnswers,
+  onForceSkip,
   onClose,
 }: Props) {
-  const continueBtnRef = useRef<HTMLButtonElement>(null);
+  // 每题答案
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const firstTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  // 打开时聚焦推荐按钮
+  // 弹窗打开时清空旧答案
   useEffect(() => {
-    if (open && continueBtnRef.current) {
-      continueBtnRef.current.focus();
+    if (open) {
+      setAnswers({});
     }
   }, [open]);
+
+  // 加载完毕后聚焦第一个 textarea
+  useEffect(() => {
+    if (open && bridgeQuestions && bridgeQuestions.length > 0) {
+      setTimeout(() => firstTextareaRef.current?.focus(), 80);
+    }
+  }, [open, bridgeQuestions]);
 
   // ESC 关闭
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !loadingContinue && !loadingForce) {
+      if (e.key === "Escape" && !loadingSubmit && !loadingForce) {
         onClose();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, loadingContinue, loadingForce, onClose]);
+  }, [open, loadingSubmit, loadingForce, onClose]);
 
   if (!open) return null;
 
-  const busy = loadingContinue || loadingForce;
+  const busy = loadingSubmit || loadingForce;
+  const questionsList = bridgeQuestions ?? [];
+  const hasAnyAnswer = Object.values(answers).some((v) => v.trim().length > 0);
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-[200] flex items-start sm:items-center justify-center p-3 sm:p-6 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bp-gate-title"
@@ -88,13 +112,16 @@ export function BPGateDialog({
       <button
         type="button"
         aria-label="关闭"
-        className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/65 backdrop-blur-sm"
         onClick={() => !busy && onClose()}
         disabled={busy}
       />
 
       {/* 弹窗主体 · 暗夜玫瑰风 */}
-      <div className="relative w-full max-w-md rounded-2xl border border-xx-border-soft bg-xx-bg-2 shadow-2xl overflow-hidden">
+      <div
+        ref={dialogRef}
+        className="relative w-full max-w-lg my-4 sm:my-0 rounded-2xl border border-xx-border-soft bg-xx-bg-2 shadow-2xl overflow-hidden"
+      >
         {/* 顶部色带 */}
         <div className="h-1 bg-gradient-to-r from-xx-rose via-xx-gold to-xx-purple" />
 
@@ -104,66 +131,98 @@ export function BPGateDialog({
             id="bp-gate-title"
             className="font-serif text-lg sm:text-xl font-bold text-xx-text leading-snug mb-2"
           >
-            等等——姐还想问你两件事
+            等等——姐还有 {missingQuestions.length} 件事要问你
           </h2>
 
           {/* 说明文 */}
-          <p className="text-sm text-xx-text-mid leading-relaxed mb-4">
-            {message}
+          <p className="text-sm text-xx-text-mid leading-relaxed mb-5">
+            {message ||
+              "把下面这几个口子堵上，姐立刻给你写一份能晒的诊断书。"}
           </p>
 
-          {/* 缺题列表（露人话题名，不露 Q 编号） */}
-          {missingQuestions.length > 0 && (
-            <div className="rounded-xl border border-xx-rose/25 bg-xx-rose/[0.06] p-4 mb-5">
-              <p className="text-[11px] font-display text-xx-rose/85 mb-2 tracking-wider">
-                还没问到的：
-              </p>
-              <ul className="space-y-1.5">
-                {missingQuestions.map((q, i) => (
-                  <li
-                    key={q.qid}
-                    className="flex items-start gap-2 text-sm text-xx-text"
-                  >
-                    <span className="text-xx-rose/70 font-display shrink-0">
-                      {i + 1}.
+          {/* 加载态 */}
+          {bridgeLoading && (
+            <div className="py-8 text-center text-xs text-xx-text-dim font-display tracking-wider">
+              <div className="inline-block w-4 h-4 border-2 border-xx-rose border-t-transparent rounded-full animate-spin mr-2 align-middle" />
+              姐想想怎么问……
+            </div>
+          )}
+
+          {/* 表单区 */}
+          {!bridgeLoading && questionsList.length > 0 && (
+            <div className="space-y-5 mb-5">
+              {questionsList.map((q, idx) => (
+                <div key={q.qid} className="space-y-2">
+                  {/* 主题名 */}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xx-rose font-display text-sm font-semibold shrink-0">
+                      {idx + 1}.
                     </span>
-                    <span>「{q.name}」</span>
-                  </li>
-                ))}
-              </ul>
+                    <span className="font-serif text-sm sm:text-base font-bold text-xx-text">
+                      「{q.name}」
+                    </span>
+                  </div>
+
+                  {/* 追问 prompt */}
+                  <p
+                    className="text-xs sm:text-sm text-xx-text-mid leading-relaxed pl-5 whitespace-pre-line"
+                  >
+                    {q.prompt}
+                  </p>
+
+                  {/* 答案输入框 */}
+                  <textarea
+                    ref={idx === 0 ? firstTextareaRef : undefined}
+                    value={answers[q.qid] ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [q.qid]: e.target.value,
+                      }))
+                    }
+                    disabled={busy}
+                    placeholder="（可填可不填，不填就跳过这题）"
+                    rows={3}
+                    className="ml-5 block w-[calc(100%-1.25rem)] px-3 py-2.5 rounded-xl bg-xx-bg-3/40 border border-xx-border-soft text-sm text-xx-text placeholder:text-xx-text-dim/60 focus:border-xx-rose/50 focus:outline-none focus:ring-1 focus:ring-xx-rose/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors leading-relaxed"
+                  />
+                </div>
+              ))}
             </div>
           )}
 
           {/* 进度小字 */}
-          {gate && (
-            <p className="text-[11px] text-xx-text-dim mb-5 font-display tracking-wider">
-              当前 {gate.currentTurns} 轮 · 已聊到 {gate.currentCoverage}/12
-              题
-              {gate.missingRounds > 0 ? ` · 还缺 ${gate.missingRounds} 轮` : ""}
+          {gate && !bridgeLoading && (
+            <p className="text-[11px] text-xx-text-dim mb-4 font-display tracking-wider">
+              当前 {gate.currentTurns} 轮 · 已聊到 {gate.currentCoverage}/12 题
             </p>
           )}
 
           {/* 按钮区 */}
           <div className="flex flex-col gap-2.5">
-            {/* 主按钮：继续聊（推荐） */}
+            {/* 主按钮：答完出 BP */}
             <button
-              ref={continueBtnRef}
               type="button"
-              onClick={onContinueChat}
-              disabled={busy}
+              onClick={() => onSubmitAnswers(answers)}
+              disabled={busy || bridgeLoading}
               className="w-full px-4 py-3 rounded-xl bg-xx-rose text-white font-display text-sm tracking-wide hover:bg-xx-rose/90 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loadingContinue ? "姐想想怎么问……" : "好，继续聊（推荐）"}
+              {loadingSubmit
+                ? "姐这就给你写……"
+                : hasAnyAnswer
+                ? "答完了，给姐写诊断书"
+                : "（没填也行）写诊断书"}
             </button>
 
-            {/* 次按钮：强行出 BP */}
+            {/* 次按钮：跳过直接硬出 */}
             <button
               type="button"
-              onClick={onForceGenerate}
-              disabled={busy}
+              onClick={onForceSkip}
+              disabled={busy || bridgeLoading}
               className="w-full px-4 py-3 rounded-xl border border-xx-border-soft bg-transparent text-xx-text-mid font-display text-sm tracking-wide hover:bg-xx-bg-3/50 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loadingForce ? "硬写中……" : "硬要现在出（带「未充分会诊」水印）"}
+              {loadingForce
+                ? "硬写中……"
+                : "跳过这俩，硬要现在出（带「未充分会诊」水印）"}
             </button>
 
             {/* 关闭 */}
@@ -177,7 +236,7 @@ export function BPGateDialog({
             </button>
           </div>
 
-          {/* 调性小字（书卷气，不抢戏） */}
+          {/* 调性小字 */}
           <p className="mt-4 text-[10.5px] text-xx-text-dim/70 italic font-serif text-center leading-relaxed">
             姐不是为难你——是为难那份诊断书。
           </p>

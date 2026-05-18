@@ -8,6 +8,91 @@
 
 ---
 
+## [v0.7.12.2] - 2026-05-18 — 「BP 拦截改弹窗内嵌追问表单 · 答完直接出 BP」
+
+> v0.7.12.1 上线后用户实测：弹窗"完全没反应"（疑似浏览器缓存或 z-index 问题）。
+> 加上 v0.7.12.1 设计本身有缺陷：拦下后醒醒在主对话流追问，用户要回去答完再点出 BP，二次操作。
+> 本版重构为 **弹窗内嵌表单**：缺哪几题就在弹窗里直接给文本框填，答完一键出 BP。
+
+### Added
+
+- **`components/chat/BPGateDialog.tsx`** 全面重写为表单版（~250 行）：
+  - 每个 `missingQuestion` 渲染成「主题名 + 姐姐口吻追问 prompt + textarea」
+  - 三按钮：`答完了，给姐写诊断书`（主） / `跳过这俩硬要现在出（带水印）`（次） / `算了，我再想想`（关闭）
+  - bridgeQuestions 加载中显示 spinner「姐想想怎么问……」
+  - 答案为空也允许提交（走 force=true 路径）
+- **`/api/diagnosis/bridge`** 重构（重大变更）：
+  - **不再返回单段 content（旧用法），改返回结构化 `questions: [{qid, name, prompt}]` 数组**
+  - LLM 用 `response_format: json_object` 严格 JSON 输出
+  - 失败时返 `ok: true` + `source: "fallback"` + 静态兜底 questions（永不让前端崩）
+- **`FALLBACK_PROMPTS`**：12 题 × 三档 = 36 条静态兜底追问 prompt
+  - 三档差异化：casual 嫌弃宠溺 / rational 理性数字 / scathing 精准戳痛
+- **`components/ChatShell.tsx`** 新增 `injectUserMessage(content)`：
+  - 把答案合并塞回对话流末尾（保留追问历史 · KV 持久化）
+- **`components/Chat.tsx`** `handleSubmitAnswers`：
+  - 把每题答案拼成 `【题名】用户答案` 格式合并成一条 user 消息
+  - 注入对话流 → 等 600ms 给账本判官时间 → 调 generate?force=true
+  - report.forced=true → BP 顶部金色水印仍显示
+
+### Changed
+
+- **`components/Chat.tsx`** `gateDialog` state 重构：
+  - 旧字段 `loadingContinue` → 新 `loadingSubmit`
+  - 新增 `bridgeQuestions: BridgeQuestion[] | undefined` + `bridgeLoading: boolean`
+  - 422 触发后立即 `void fetchBridgeQuestions()` 异步拉问题
+- **`components/ChatShell.tsx`** Chat 多传一个 `onInjectUserMessage` prop
+- 旧 `handleContinueChatFromGate` / `handleForceGenerateFromGate` 删除，重写为 `handleSubmitAnswers` / `handleForceSkip`
+
+### Fixed
+
+- v0.7.12.1 弹窗"完全没反应"问题（推测是浏览器缓存旧 JS / z-index 被遮住）—— 本版组件重写后等同于强制刷新
+
+### 用户体验流程
+
+```
+聊 N 轮 → 点「出诊断书」
+        ↓
+后端 422 + missingQuestions: [Q1+Q2]
+        ↓
+弹窗立即显示（先 loading）：
+   ┌─────────────────────────────────┐
+   │ 等等——姐还有 2 件事要问你         │
+   │                                  │
+   │ ⏳ 姐想想怎么问……                │
+   └─────────────────────────────────┘
+        ↓ 800ms 内 bridge 返回
+   ┌─────────────────────────────────┐
+   │ 1. 「为谁做」                     │
+   │    你这事到底服务谁？             │
+   │    年龄/职业/场景说一下           │
+   │   ┌─────────────────────────┐  │
+   │   │ [textarea]               │  │
+   │   └─────────────────────────┘  │
+   │                                  │
+   │ 2. 「解决什么真痛」               │
+   │    他不爽什么？...               │
+   │   ┌─────────────────────────┐  │
+   │   │ [textarea · 可填可不填]   │  │
+   │   └─────────────────────────┘  │
+   │                                  │
+   │ [答完了，给姐写诊断书]  ← 主按钮  │
+   │ [跳过这俩硬要现在出（带水印）]    │
+   │ [算了，我再想想]                  │
+   └─────────────────────────────────┘
+        ↓ 用户填了答案点「写诊断书」
+[答案合并成 user 消息塞回对话流]
+        ↓
+[generate?force=true → 顶部水印 + BP 跳转]
+```
+
+### 验证
+
+- tsc 0 error / next build ✓
+- 首页 73.4 → 74.1 kB（+0.7 KB）
+- bridge API 旧调用方（v0.7.12.1）已废弃，但兼容保留 missingQuestions 入参
+
+---
+
 ## [v0.7.12.1] - 2026-05-15 — 「BP 拦截 = 触发姐姐主动追问，不是干巴巴报错」
 
 > v0.7.12.0 上线后真机发现：聊 11 轮被拦下，文案只说「再补 N 块拼图」，用户不知道缺什么、姐姐也没主动来问。

@@ -14,7 +14,7 @@ import { StatsBanner } from "./StatsBanner";
 import { track } from "../lib/analytics";
 import { DrawerTriggerButton } from "./SideDrawer";
 import { ChatProgressHint } from "./chat/ChatProgressHint";
-import { BPGateDialog, type MissingQ } from "./chat/BPGateDialog";
+import { BPGateDialog, type MissingQ, type BridgeQuestion } from "./chat/BPGateDialog";
 
 interface ChatProps {
   mode: ModeId;
@@ -32,6 +32,8 @@ interface ChatProps {
   onToast?: (msg: string) => void;
   /** v0.7.12.1：BP gate 拦下后调 bridge 把醒醒追问注入对话流 */
   onInjectAssistantMessage?: (content: string) => void;
+  /** v0.7.12.2：弹窗内答完后把用户答案合并塞回对话流 */
+  onInjectUserMessage?: (content: string) => void;
 }
 
 export function Chat({
@@ -47,30 +49,35 @@ export function Chat({
   qProgress,
   onToast,
   onInjectAssistantMessage,
+  onInjectUserMessage,
 }: ChatProps) {
   const [input, setInput] = useState("");
   /** v0.4：当前是否有 AI 消息在播放语音（驱动人像呼吸动效） */
   const [isSpeaking, setIsSpeaking] = useState(false);
   /** v0.7.11：诊断书生成中 loading（防止重复点击） */
   const [generatingDiagnosis, setGeneratingDiagnosis] = useState(false);
-  /** v0.7.12.1：BP gate 拦截弹窗状态 */
+  /** v0.7.12.2：BP gate 拦截弹窗状态（表单版） */
   const [gateDialog, setGateDialog] = useState<{
     open: boolean;
     message: string;
     missingQuestions: MissingQ[];
+    bridgeQuestions: BridgeQuestion[] | undefined;
+    bridgeLoading: boolean;
     gate?: {
       missingRounds: number;
       missingCoverage: number;
       currentTurns: number;
       currentCoverage: number;
     };
-    loadingContinue: boolean;
+    loadingSubmit: boolean;
     loadingForce: boolean;
   }>({
     open: false,
     message: "",
     missingQuestions: [],
-    loadingContinue: false,
+    bridgeQuestions: undefined,
+    bridgeLoading: false,
+    loadingSubmit: false,
     loadingForce: false,
   });
   const listRef = useRef<HTMLDivElement>(null);
@@ -181,15 +188,18 @@ export function Chat({
       const data = await res.json();
       clearTimeout(midwayHint);
 
-      // v0.7.12.1：422 = BP gate 拦截 → 弹气泡（仅非 force 时触发）
+      // v0.7.12.2：422 = BP gate 拦截 → 弹表单弹窗 + 异步拉 bridge 问题
       if (res.status === 422 && data?.gate && Array.isArray(data?.missingQuestions)) {
         setGeneratingDiagnosis(false);
+        const missingQs = data.missingQuestions as MissingQ[];
         setGateDialog({
           open: true,
           message: typeof data.error === "string" ? data.error : "再聊几轮姐才能写透",
-          missingQuestions: data.missingQuestions as MissingQ[],
+          missingQuestions: missingQs,
+          bridgeQuestions: undefined,
+          bridgeLoading: true,
           gate: data.gate,
-          loadingContinue: false,
+          loadingSubmit: false,
           loadingForce: false,
         });
         track("diagnosis_gate_blocked", {
@@ -198,6 +208,9 @@ export function Chat({
           missing_rounds: data.gate?.missingRounds ?? 0,
           missing_coverage: data.gate?.missingCoverage ?? 0,
         });
+
+        // 异步去 bridge 拿三档差异化的姐姐口吻追问 prompts
+        void fetchBridgeQuestions(missingQs);
         return false;
       }
 
@@ -220,15 +233,10 @@ export function Chat({
   }
 
   /**
-   * 用户在 gate 弹窗点「继续聊」→ 调 bridge 注入醒醒口吻追问
+   * v0.7.12.2：异步去 bridge 拿三档差异化的具体追问 prompt
+   * 失败时静默吞，弹窗显示静态兜底
    */
-  async function handleContinueChatFromGate() {
-    setGateDialog((prev) => ({ ...prev, loadingContinue: true }));
-    track("diagnosis_gate_continue_chat", {
-      mode,
-      turn_index: turnCount,
-    });
-
+  async function fetchBridgeQuestions(missingQs: MissingQ[]) {
     try {
       const res = await fetch("/api/diagnosis/bridge", {
         method: "POST",
@@ -236,46 +244,82 @@ export function Chat({
         body: JSON.stringify({
           mode,
           sessionId,
-          missingQuestions: gateDialog.missingQuestions,
+          missingQuestions: missingQs,
         }),
       });
       const data = await res.json();
-
-      const content =
-        (res.ok && data?.ok && typeof data.content === "string" && data.content.trim()) ||
-        (typeof data?.fallback === "string" ? data.fallback.trim() : "");
-
-      if (content) {
-        onInjectAssistantMessage?.(content);
-        setGateDialog({
-          open: false,
-          message: "",
-          missingQuestions: [],
-          loadingContinue: false,
-          loadingForce: false,
-        });
-        // 滚动到底部
-        setTimeout(() => {
-          listRef.current?.scrollTo({
-            top: listRef.current.scrollHeight,
-            behavior: "smooth",
-          });
-        }, 100);
+      if (res.ok && data?.ok && Array.isArray(data?.questions)) {
+        setGateDialog((prev) => ({
+          ...prev,
+          bridgeQuestions: data.questions as BridgeQuestion[],
+          bridgeLoading: false,
+        }));
       } else {
-        onToast?.("醒醒走神了，再点一下");
-        setGateDialog((prev) => ({ ...prev, loadingContinue: false }));
+        // 服务返回但格式异常 → 用 missingQuestions 自己生成静态版
+        setGateDialog((prev) => ({
+          ...prev,
+          bridgeQuestions: missingQs.map((q) => ({
+            qid: q.qid,
+            name: q.name,
+            prompt: "把你想到的写下来——具体场景、数字、人，越细越好。",
+          })),
+          bridgeLoading: false,
+        }));
       }
     } catch (err) {
-      console.error("[bridge] 网络错误", err);
-      onToast?.("网络断了，再试一次");
-      setGateDialog((prev) => ({ ...prev, loadingContinue: false }));
+      console.warn("[bridge] 调用失败，用静态兜底", err);
+      setGateDialog((prev) => ({
+        ...prev,
+        bridgeQuestions: missingQs.map((q) => ({
+          qid: q.qid,
+          name: q.name,
+          prompt: "把你想到的写下来——具体场景、数字、人，越细越好。",
+        })),
+        bridgeLoading: false,
+      }));
     }
   }
 
   /**
-   * 用户在 gate 弹窗点「硬要现在出 BP」→ force=true 重发 generate
+   * v0.7.12.2：用户在弹窗里答完点「写诊断书」
+   *   1. 把答案合并成一条 user 消息塞回对话流
+   *   2. 调 generate?force=true 立即出 BP（report.forced=true 加水印）
    */
-  async function handleForceGenerateFromGate() {
+  async function handleSubmitAnswers(answers: Record<number, string>) {
+    setGateDialog((prev) => ({ ...prev, loadingSubmit: true }));
+    track("diagnosis_gate_continue_chat", {
+      mode,
+      turn_index: turnCount,
+    });
+
+    // 把有效答案拼成一条用户消息
+    const validAnswers = (gateDialog.bridgeQuestions ?? [])
+      .map((q) => {
+        const ans = (answers[q.qid] ?? "").trim();
+        if (!ans) return null;
+        return `【${q.name}】${ans}`;
+      })
+      .filter((s): s is string => s !== null);
+
+    if (validAnswers.length > 0) {
+      const mergedAnswer = validAnswers.join("\n\n");
+      onInjectUserMessage?.(mergedAnswer);
+      // 给 KV 一点时间让账本判官跑（fire-and-forget 异步），但不强求等
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    // 直接 force=true 调 generate（含答案后大概率不再缺，但保险走 force）
+    const ok = await runGenerate(true);
+    if (!ok) {
+      setGateDialog((prev) => ({ ...prev, loadingSubmit: false }));
+    }
+    // ok=true 时已跳转，不需关弹窗
+  }
+
+  /**
+   * v0.7.12.2：用户点「跳过这俩硬出」→ 不答，直接 force=true
+   */
+  async function handleForceSkip() {
     setGateDialog((prev) => ({ ...prev, loadingForce: true }));
     track("diagnosis_gate_force_generate", {
       mode,
@@ -285,7 +329,6 @@ export function Chat({
     if (!ok) {
       setGateDialog((prev) => ({ ...prev, loadingForce: false }));
     }
-    // ok=true 时已经跳转，不需要关弹窗
   }
 
   function handleCloseGate() {
@@ -293,7 +336,9 @@ export function Chat({
       open: false,
       message: "",
       missingQuestions: [],
-      loadingContinue: false,
+      bridgeQuestions: undefined,
+      bridgeLoading: false,
+      loadingSubmit: false,
       loadingForce: false,
     });
   }
@@ -532,16 +577,18 @@ export function Chat({
       </div>
     </div>
 
-    {/* v0.7.12.1：BP 拦截弹窗 —— 用户聊够轮但没聊够题时点出 BP 触发 */}
+    {/* v0.7.12.2：BP 拦截弹窗（表单版）—— 用户聊够轮但没聊够题时点出 BP 触发 */}
     <BPGateDialog
       open={gateDialog.open}
       message={gateDialog.message}
       missingQuestions={gateDialog.missingQuestions}
+      bridgeQuestions={gateDialog.bridgeQuestions}
+      bridgeLoading={gateDialog.bridgeLoading}
       gate={gateDialog.gate}
-      loadingContinue={gateDialog.loadingContinue}
+      loadingSubmit={gateDialog.loadingSubmit}
       loadingForce={gateDialog.loadingForce}
-      onContinueChat={handleContinueChatFromGate}
-      onForceGenerate={handleForceGenerateFromGate}
+      onSubmitAnswers={handleSubmitAnswers}
+      onForceSkip={handleForceSkip}
       onClose={handleCloseGate}
     />
     </>

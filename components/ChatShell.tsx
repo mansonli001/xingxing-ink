@@ -252,6 +252,24 @@ export function ChatShell() {
     ]);
   }
 
+  /**
+   * v0.7.12.2：把一条 user 消息直接塞到对话流末尾（用于弹窗答完后把答案归档）。
+   * 不走 stream 链路（不触发醒醒回复，因为下一步直接 force 出 BP）。
+   * 但会被 chat history KV 持久化，未来重开能看到这段答案。
+   */
+  function injectUserMessage(content: string) {
+    if (!content?.trim()) return;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "user",
+        content: content.trim(),
+        done: true,
+      },
+    ]);
+  }
+
   async function sendMessageWith(rawText: string) {
     const text = rawText.trim();
     if (!text || streaming) return;
@@ -494,6 +512,7 @@ export function ChatShell() {
         qProgress={qProgress}
         onToast={setToastMsg}
         onInjectAssistantMessage={injectAssistantMessage}
+        onInjectUserMessage={injectUserMessage}
       />
       <SideDrawer
         open={drawerOpen}

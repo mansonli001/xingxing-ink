@@ -137,10 +137,10 @@ export function StatsBanner() {
   if (firstLoad) return null;
   if (failed || !data) return null;
 
-  const { totalVisitors, totalRounds, onlineNow, modeDist, totalBpCount, totalQFullyCovered } = data;
+  const { totalVisitors, totalRounds, onlineNow, modeDist, totalBpCount } = data;
   const isColdStart = totalRounds < COLDSTART_ROUNDS;
   const bpCount = totalBpCount ?? 0;
-  const qFullyCount = totalQFullyCovered ?? 0;
+  // v0.7.12.3：totalQFullyCovered 字段仍在 API，但 UI 不再显示
 
   return (
     <div
@@ -228,12 +228,9 @@ export function StatsBanner() {
         </div>
       )}
 
-      {/* v0.7.12.0：12 题进度小行 · 仅 >0 且非冷启时显示，不露 Q 编号 */}
-      {!isColdStart && qFullyCount > 0 && (
-        <div className="stats-line-pieces">
-          12 题里聊透 <AnimatedNumber value={qFullyCount} firstLoad /> 题
-        </div>
-      )}
+      {/* v0.7.12.3 删除「12 题里聊透 X 题」小行 ——
+          原因：12 题是后端概念用户不懂，且与「锤出 X 份 BP」语义重复。
+          数据仍在 API 返回 totalQFullyCovered，未来需要时可恢复。 */}
 
       <style jsx>{`
         .stats-banner {
@@ -278,24 +275,7 @@ export function StatsBanner() {
           gap: 8px;
         }
 
-        /* v0.7.12.0 新增：12 题进度小行 —— 比 stats-line-online 更小、更弱、更书卷气 */
-        .stats-line-pieces {
-          font-family: "Cormorant Garamond", "Noto Serif SC", serif;
-          font-style: italic;
-          font-weight: 400;
-          font-size: 11px;
-          letter-spacing: 0.1em;
-          color: rgba(232, 180, 184, 0.42); /* 比 online 行还淡一档 · 不抢戏 */
-          line-height: 1.6;
-        }
-        .stats-line-pieces :global(.stats-number) {
-          font-family: "Manrope", "Inter Tight", sans-serif;
-          font-style: normal;
-          font-weight: 600;
-          font-size: 12px;
-          color: rgba(240, 232, 232, 0.85);
-          margin: 0 2px;
-        }
+        /* v0.7.12.3 删除：原 .stats-line-pieces 样式（12 题聊透小行）随 UI 一起移除 */
 
         /* 呼吸金点：告诉用户"这个数字是活的" */
         .online-dot {
